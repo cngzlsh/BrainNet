@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.distributions as dist
+import os
+import pickle
 
 seed = 1234
 torch.manual_seed(seed)
@@ -32,33 +34,44 @@ def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainabl
     return approx_bnn
 
 
-def generate_firing_pattern(model, input_dim, num_input, firing_rates):
+def generate_firing_pattern(model, input_dim, num_input, firing_prob):
     """
     Generates a toy dateset of firing pattern of approximate BNN
     :param model:               MLP, approximate biological network
     :param input_dim:           input dimension
     :param output_dim:          output dimension
     :param num_inputs:          number of datapoints to generate
-    :param firing_rate:         mean firing rate of each input neuron between 0 and 10, 
+    :param firing_prob:         firing probability of presynaptic neurons,
                                 scalar or numpy array (if different for each input neuron)
     :return:
-    X:                          list of input rates
+    X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
     Y:                          list of output firing patterns
     """
-    if isinstance(firing_rates, int or float):
-        firing_rates = (torch.ones(input_dim) * firing_rates).to(device)
-    else:
-        firing_rates = torch.Tensor(firing_rates).to(device)
     
-    assert firing_rates.shape == torch.Size([input_dim]), 'Number of firing rates is not equal to the number of input neurons'
-    assert torch.min(firing_rates) > 0, 'Firing rate must be positive'
-    assert torch.max(firing_rates) < 10, 'Firing rate must be smaller than 10'
+    if isinstance(firing_prob, float):
+        firing_prob = (torch.ones(input_dim) * firing_prob).to(device)
+    else:
+        firing_prob = torch.Tensor([firing_prob]).to(device)
+    
+    assert firing_prob.shape == torch.Size([input_dim]), 'Number of firing rates is not equal to the number of input neurons'
+    assert torch.min(firing_prob) > 0, 'Firing probability must be between 0 and 1'
+    assert torch.max(firing_prob) < 1, 'Firing probability must be between 0 and 1'
 
-    X = dist.Poisson(rate = firing_rates).sample(sample_shape=torch.Size([num_input]))
-
+    X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input]))
     Y = model(X)
-    print(Y, Y.shape)
+
     return X, Y
+
+def save_data(X, Y, path, filename):
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    with open(path + filename, 'wb') as f:
+        pickle.dump((X, Y), f)
+    
+    f.close()
+
 
 if __name__ == '__main__':
     x = 64               # number of hidden units in each layer
@@ -69,11 +82,13 @@ if __name__ == '__main__':
     transfer_function = nn.ReLU() 
     print(f'Network connectivity: {x * y * z}')
 
-    input_dim = 4
-    output_dim = 2
+    input_dim = 16
+    output_dim = 16
     num_input = 1000
-    firing_rates = 6
+    firing_prob = 0.5
 
     approx_bnn = load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X, Y = generate_firing_pattern(model=approx_bnn, input_dim=input_dim, num_input=num_input, firing_rates=firing_rates)
+    X, Y = generate_firing_pattern(model=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
+
+    save_data(X, Y, './data/', 'test.pkl')

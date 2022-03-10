@@ -33,6 +33,7 @@ class ApproximateBNN(nn.Module):
 
                     if not trainable:
                         layer.weight.requires_grad = False
+                        layer.bias.requires_grad = False
         
         apply_connectivity()
 
@@ -43,7 +44,7 @@ class ApproximateBNN(nn.Module):
 if __name__ == '__main__':
     x = 16              # number of hidden units in each layer
     y = 0.9             # network connectivity
-    z = 3               # number of layers
+    z = 4               # number of layers
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
     print(f'Network connectivity: {x * y * z}')
