@@ -1,4 +1,5 @@
-from approx_bnn import ApproximateBNN
+from approx_bnn import *
+from utils import save_data
 
 import torch
 import torch.nn as nn
@@ -26,7 +27,7 @@ def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainabl
     :return:
     approx_bnn:                 loaded MLP
     """
-    approx_bnn = ApproximateBNN(x, y, z, input_dim, output_dim, transfer_function, bias=bias, trainable=trainable).to(device)
+    approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function, bias=bias, trainable=trainable).to(device)
 
     if state_dict:
         approx_bnn.load_state_dict(torch.load(state_dict))
@@ -34,7 +35,7 @@ def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainabl
     return approx_bnn
 
 
-def generate_firing_pattern(model, input_dim, num_input, firing_prob):
+def generate_binary_firing_pattern(model, input_dim, num_input, firing_prob):
     """
     Generates a toy dateset of firing pattern of approximate BNN
     :param model:               MLP, approximate biological network
@@ -62,15 +63,7 @@ def generate_firing_pattern(model, input_dim, num_input, firing_prob):
 
     return X, Y
 
-def save_data(X, Y, path, filename):
 
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    with open(path + filename, 'wb') as f:
-        pickle.dump((X, Y), f)
-    
-    f.close()
 
 
 if __name__ == '__main__':
@@ -89,6 +82,6 @@ if __name__ == '__main__':
 
     approx_bnn = load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X, Y = generate_firing_pattern(model=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
+    X, Y = generate_binary_firing_pattern(model=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
 
     save_data(X, Y, './data/', 'test.pkl')

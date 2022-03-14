@@ -6,7 +6,10 @@ seed = 1234
 torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class ApproximateBNN(nn.Module):
+class FeedForwardApproximateBNN(nn.Module):
+    '''
+    An approximately biological network
+    '''
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False) -> None:
         super().__init__()
         
@@ -40,6 +43,12 @@ class ApproximateBNN(nn.Module):
     def forward(self, input_pattern):
         return self.layers(input_pattern)
 
+
+class RecurrentApproximateBNN(nn.Module):
+    pass
+
+class ResidualApproximateBNN(nn.Module):
+    pass
 
 if __name__ == '__main__':
     x = 16              # number of hidden units in each layer
