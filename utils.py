@@ -2,6 +2,7 @@ import pickle
 import torch
 import torch.nn as nn
 import time
+import os
 
 def save_data(X, Y, path, filename):
 
@@ -12,6 +13,7 @@ def save_data(X, Y, path, filename):
         pickle.dump((X, Y), f)
     
     f.close()
+
 
 def load_data(path, filename):
 

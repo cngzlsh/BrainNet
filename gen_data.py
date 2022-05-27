@@ -12,7 +12,7 @@ seed = 1234
 torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False):
+def load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False):
     """
     Loads an approximate BNN model
     :param x:                   number of hidden units of the approximate biological network
@@ -28,6 +28,7 @@ def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainabl
     approx_bnn:                 loaded MLP
     """
     approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function, bias=bias, trainable=trainable).to(device)
+    approx_bnn.to(device)
 
     if state_dict:
         approx_bnn.load_state_dict(torch.load(state_dict))
@@ -35,7 +36,7 @@ def load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainabl
     return approx_bnn
 
 
-def generate_binary_firing_pattern(model, input_dim, num_input, firing_prob):
+def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob):
     """
     Generates a toy dateset of firing pattern of approximate BNN
     :param model:               MLP, approximate biological network
@@ -59,11 +60,9 @@ def generate_binary_firing_pattern(model, input_dim, num_input, firing_prob):
     assert torch.max(firing_prob) < 1, 'Firing probability must be between 0 and 1'
 
     X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input]))
-    Y = model(X)
+    Y = BNN(X)
 
     return X, Y
-
-
 
 
 if __name__ == '__main__':
@@ -80,8 +79,8 @@ if __name__ == '__main__':
     num_input = 1000
     firing_prob = 0.5
 
-    approx_bnn = load_model(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
+    approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X, Y = generate_binary_firing_pattern(model=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
-
+    X, Y = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
+    
     save_data(X, Y, './data/', 'test.pkl')

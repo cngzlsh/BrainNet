@@ -8,7 +8,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class FeedForwardApproximateBNN(nn.Module):
     '''
-    An approximately biological network
+    A feed-forward approximately biological network
     '''
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False) -> None:
         super().__init__()
@@ -45,7 +45,14 @@ class FeedForwardApproximateBNN(nn.Module):
 
 
 class RecurrentApproximateBNN(nn.Module):
-    pass
+    '''
+    An approximately biological network with recurrent
+    '''
+    def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False):
+        super().__init__()
+
+        self.layers = nn.Sequential()
+        pass
 
 class ResidualApproximateBNN(nn.Module):
     pass
@@ -61,7 +68,7 @@ if __name__ == '__main__':
     input_dim = 1
     output_dim = 1
 
-    approx_bnn = ApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable).to(device)
+    approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable).to(device)
 
     for param in approx_bnn.parameters():
         print(param.data)
