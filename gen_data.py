@@ -76,11 +76,11 @@ if __name__ == '__main__':
 
     input_dim = 16
     output_dim = 16
-    num_input = 1000
+    num_input = 50000
     firing_prob = 0.5
 
     approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
     X, Y = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
     
-    save_data(X, Y, './data/', 'test.pkl')
+    save_data(X, Y, './data/', 'train.pkl')

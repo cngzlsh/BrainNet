@@ -10,18 +10,19 @@ class FeedForwardDNN1(nn.Module):
         super().__init__()
         
         self.layers = nn.Sequential()
+
         # input layer
-        self.layers.add_module(nn.Linear(input_dim, hidden_dim))
-        self.layers.add_module(transfer_function)
+        self.layers.add_module('input', nn.Linear(input_dim, hidden_dim))
+        self.layers.add_module('relu_1', transfer_function)
         
         # hidden layers
         for hidden_idx in range(1, n_layers+1):
-            self.layers.add_module(nn.Linear(hidden_dim, hidden_dim))
-            self.layers.add_module(transfer_function)
+            self.layers.add_module(f'hidden_{hidden_idx}', nn.Linear(hidden_dim, hidden_dim))
+            self.layers.add_module(f'relu_{hidden_idx+1}', transfer_function)
 
         # output layer
-        self.layers.add_module(nn.Linear(hidden_dim, output_dim))
-        self.layers.add_module(transfer_function)
+        self.layers.add_module('output', nn.Linear(hidden_dim, output_dim))
+        self.layers.add_module(f'ReLU_{n_layers+1}', transfer_function)
 
     def forward(self, input_pattern):
         return self.layers(input_pattern)

@@ -4,6 +4,10 @@ import torch.nn as nn
 import time
 import os
 
+from torch.utils.data import Dataset, DataLoader
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def save_data(X, Y, path, filename):
     '''
     Saves synthetic neuron firing data to pickle file
@@ -25,6 +29,9 @@ def load_data(path, filename):
         X, Y = pickle.load(f)
     f.close()
 
+    X.to(device)
+    Y.to(device)
+
     return X, Y
 
 
@@ -38,30 +45,32 @@ def elapsed_time(start, end):
     return hrs, mins % 60, secs % 60
 
 
-def create_mini_batches(X, Y, batch_size):
-    '''
-    Creates mini batches from data
-    :param X:                   training data, shape (N_data, input_dim)
-    :param Y:                   training label, shape (N_data, output_dim)
-    :param batch_size:          size of mini_batches, 1 <= batch_size <= N_data
-    :return:
-    X_batch:                    mini-batch training data, shape (n_batches, batch_size, input_dim)
-    Y_batch:                    mini-batch training label, shape (n_batches, batch_size, output_dim)
-    '''
+class BNN_Dataset(Dataset):
+    def __init__(self, X, Y):
+        self.inputs = X
+        self.labels = Y
+
+    def __len__(self):
+        return len(self.inputs)
     
-    X_batch = torch.zeros_like
+    def __getitem__(self, idx):
+        input = self.inputs[idx,:]
+        label = self.labels[idx,:]
+        return input, label
 
 
-
-def train(model, train_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False):
+def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False):
     '''
     Main training function. Iterates through train_loader
     '''
-    model.train()
+    
     start = time.time()
 
+    eval_loss = eval(model, test_loader, criterion)
+    print(f'Initial eval loss: {eval_loss}')
+
     for epoch in range(num_epochs):
-        
+        model.train()
         epoch_loss = 0
         
         for i, (X, Y) in enumerate(iter(train_loader)):
@@ -77,22 +86,23 @@ def train(model, train_loader, optimiser, criterion, num_epochs, verbose=True, f
 
             if force_stop and i == 20:
                 break
-        
+
+        eval_loss = eval(model, test_loader, criterion)
+
         if verbose:
             epoch_end = time.time()
             hrs, mins, secs = elapsed_time(start, epoch_end)
-            print(f'Epoch {epoch+1} completed with training loss {int(epoch_loss)}. Time elapsed: {hrs} h {mins} m {secs} s.')
+            print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
         if force_stop and i == 20:
             break
     
-    end = time.time()
     hrs, mins, secs = elapsed_time(start, time.time())
 
-    print(f'Training completed with final epoch loss {epoch_loss}. Time elapsed: {hrs} h {mins} m {secs} s.')
+    print(f'Training completed with final epoch loss {epoch_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
 
 
-def eval(model, eval_loader, criterion):
+def eval(model, test_loader, criterion):
     '''
     Evaluation function.
     '''
@@ -102,7 +112,7 @@ def eval(model, eval_loader, criterion):
 
         eval_loss = 0
 
-        for i, (X, Y) in iter(eval_loader):
+        for i, (X, Y) in enumerate(iter(test_loader)):
             
             Y_hat = model(X)
             loss = criterion(Y_hat, Y)
