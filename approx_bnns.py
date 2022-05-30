@@ -51,7 +51,7 @@ class RecurrentApproximateBNN(nn.Module):
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False):
         super().__init__()
 
-        self.layers = nn.Sequential()
+        self.layers = nn.Sequential()  
         pass
 
 class ResidualApproximateBNN(nn.Module):

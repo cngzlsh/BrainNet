@@ -1,4 +1,4 @@
-from approx_bnn import *
+from approx_bnns import *
 from utils import save_data
 
 import torch
@@ -66,7 +66,7 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob):
 
 
 if __name__ == '__main__':
-    x = 64               # number of hidden units in each layer
+    x = 64              # number of hidden units in each layer
     y = 0.8             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
