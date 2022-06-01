@@ -63,6 +63,32 @@ class BNN_Dataset(Dataset):
         label = self.labels[idx,:]
         return input, label
 
+def visualise_prediction(y, y_hat, reshape='square'):
+
+    if reshape == 'square':
+        dim = len(y)
+        w, l = int(np.sqrt(dim)), int(np.sqrt(dim))
+    else:
+        w, l = reshape
+    
+    try:
+        y_r = y.reshape((w,l)).cpu()
+        y_hat_r = y_hat.reshape(w,l).cpu().detach().numpy()
+    except:
+        raise ValueError('Reshape dimension mismatch')
+
+    plt.figure(figsize=(12,6))
+    
+    plt.subplot(121)
+    plt.imshow(y_r)
+    plt.title('True firing pattern')
+
+    plt.subplot(122)
+    plt.imshow(y_hat_r)
+    plt.title('Predicted firing pattern')
+
+    plt.show()
+    
 
 def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False):
     '''
@@ -136,13 +162,13 @@ def plot_loss_curve(train_losses, eval_losses, loss_func='MSE loss'):
     n_epochs = len(train_losses)
     
     plt.figure(figsize=(12,6))
-    plt.plot(np.log(train_losses))
-    plt.plot(np.log(eval_losses))
+    plt.plot(train_losses)
+    plt.plot(eval_losses)
 
     plt.legend(['train', 'eval'])
     
     plt.xlabel('Epochs')
-    plt.ylabel(loss_func + ' in log scale')
+    plt.ylabel(loss_func)
 
     plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
     plt.show()

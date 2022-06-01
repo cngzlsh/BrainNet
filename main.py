@@ -5,7 +5,7 @@ from models import *
 from utils import *
 from torch.utils.data import DataLoader
 
-seed = 1234
+seed = 123
 torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -15,7 +15,7 @@ X_test, Y_test = load_data('./data/', 'test.pkl')
 
 batch_size = 50    # number of data points in each mini-batch
 n_train = 10000    # number of data used, from 1 to len(X_train)
-n_epochs = 50      # number of training epochs
+n_epochs = 20      # number of training epochs
 
 # deep learning model
 DNN = FeedForwardDNN1(input_dim=16, hidden_dim=64, n_layers=4, output_dim=16).to(device)
@@ -26,6 +26,8 @@ criterion = nn.MSELoss()
 
 
 if __name__ == '__main__':
+    visualise_prediction(Y_test[231,:], DNN(X_test[231,:]))
+
     train_dataset = BNN_Dataset(X_train[:n_train], Y_train[:n_train])
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
 
@@ -39,3 +41,5 @@ if __name__ == '__main__':
         verbose=True, force_stop=False)
     
     plot_loss_curve(train_losses, eval_losses, loss_func='MSE Loss')
+
+    visualise_prediction(Y_test[231,:], DNN(X_test[231,:]))
