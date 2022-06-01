@@ -1,8 +1,13 @@
 import pickle
-import torch
-import torch.nn as nn
 import time
 import os
+
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(font_scale=1.2)
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -61,13 +66,15 @@ class BNN_Dataset(Dataset):
 
 def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False):
     '''
-    Main training function. Iterates through train_loader
+    Main training function. Iterates through training set in mini batches, updates gradients and compute loss
     '''
     
     start = time.time()
 
-    eval_loss = eval(model, test_loader, criterion)
-    print(f'Initial eval loss: {eval_loss}')
+    eval_losses, train_losses = [], []
+
+    init_eval_loss = eval(model, test_loader, criterion)
+    print(f'Initial eval loss: {init_eval_loss}')
 
     for epoch in range(num_epochs):
         model.train()
@@ -89,6 +96,9 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
 
         eval_loss = eval(model, test_loader, criterion)
 
+        train_losses.append(epoch_loss)
+        eval_losses.append(eval_loss)
+
         if verbose:
             epoch_end = time.time()
             hrs, mins, secs = elapsed_time(start, epoch_end)
@@ -100,11 +110,12 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     hrs, mins, secs = elapsed_time(start, time.time())
 
     print(f'Training completed with final epoch loss {epoch_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+    return train_losses, eval_losses
 
 
 def eval(model, test_loader, criterion):
     '''
-    Evaluation function.
+    Evaluation function. Iterates through test set and compute loss.
     '''
     model.eval()
 
@@ -120,3 +131,18 @@ def eval(model, test_loader, criterion):
             eval_loss += loss.item()
     
     return eval_loss
+
+def plot_loss_curve(train_losses, eval_losses, loss_func='MSE loss'):
+    n_epochs = len(train_losses)
+    
+    plt.figure(figsize=(12,6))
+    plt.plot(np.log(train_losses))
+    plt.plot(np.log(eval_losses))
+
+    plt.legend(['train', 'eval'])
+    
+    plt.xlabel('Epochs')
+    plt.ylabel(loss_func + ' in log scale')
+
+    plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
+    plt.show()

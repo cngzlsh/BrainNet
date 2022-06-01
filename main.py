@@ -32,5 +32,10 @@ if __name__ == '__main__':
     test_dataset = BNN_Dataset(X_test, Y_test)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    train(model=DNN, train_loader=train_dataloader, test_loader=test_dataloader, optimiser=optimiser, 
-    criterion=criterion,num_epochs=n_epochs, verbose=True, force_stop=False)
+    train_losses, eval_losses = train(
+        model=DNN,
+        train_loader=train_dataloader, test_loader=test_dataloader,
+        optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+        verbose=True, force_stop=False)
+    
+    plot_loss_curve(train_losses, eval_losses, loss_func='MSE Loss')
