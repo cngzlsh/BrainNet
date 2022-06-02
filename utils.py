@@ -51,6 +51,9 @@ def elapsed_time(start, end):
 
 
 class BNN_Dataset(Dataset):
+    '''
+    Dataset class for creating iterable dataloader
+    '''
     def __init__(self, X, Y):
         self.inputs = X
         self.labels = Y
@@ -64,7 +67,12 @@ class BNN_Dataset(Dataset):
         return input, label
 
 def visualise_prediction(y, y_hat, reshape='square'):
-
+    '''
+    Visualise and compare the prediction of a neuronal firing pattern in a colour map.
+    :param y:                   true label
+    :param y_hat:               prediction
+    :param reshape:             tuple (w, h), how the colour map is shown. By default show in a square
+    '''
     if reshape == 'square':
         dim = len(y)
         w, l = int(np.sqrt(dim)), int(np.sqrt(dim))
@@ -158,6 +166,9 @@ def eval(model, test_loader, criterion):
     return eval_loss
 
 def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
+    '''
+    Plots the loss history per epoch.
+    '''
     n_epochs = len(train_losses)
     
     plt.figure(figsize=(12,6))
