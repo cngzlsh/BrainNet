@@ -3,10 +3,7 @@ from utils import save_data
 
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.distributions as dist
-import os
-import pickle
 
 seed = 1234
 torch.manual_seed(seed)
@@ -36,7 +33,7 @@ def load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable,
     return approx_bnn
 
 
-def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob):
+def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gaussian_noise=False):
     """
     Generates a toy dateset of firing pattern of approximate BNN
     :param model:               MLP, approximate biological network
@@ -45,6 +42,7 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob):
     :param num_inputs:          number of datapoints to generate
     :param firing_prob:         firing probability of presynaptic neurons,
                                 scalar or numpy array (if different for each input neuron)
+    :param gaussian_noise:      (mean, std), whether to add noise to outputs. Default false
     :return:
     X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
     Y:                          list of output firing patterns
@@ -62,11 +60,15 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob):
     X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input]))
     Y = BNN(X)
 
-    return X, Y
+    if gaussian_noise is not False:
+        mu, sigma = gaussian_noise
+        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape)
+
+    return X.cpu(), Y.cpu()
 
 
 if __name__ == '__main__':
-    x = 64              # number of hidden units in each layer
+    x = 256             # number of hidden units in each layer
     y = 0.8             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
@@ -76,11 +78,14 @@ if __name__ == '__main__':
 
     input_dim = 16
     output_dim = 16
-    num_input = 50000
+    num_train_input = 10000
+    num_test_input = 1000
     firing_prob = 0.5
 
     approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X, Y = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_input, firing_prob=firing_prob)
-    
-    save_data(X, Y, './data/', 'train.pkl')
+    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob)
+    save_data(X_train, Y_train, './data/', 'train.pkl')
+
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob)
+    save_data(X_test, Y_test, './data/', 'test.pkl')

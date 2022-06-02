@@ -59,7 +59,7 @@ class ResidualApproximateBNN(nn.Module):
 
 if __name__ == '__main__':
     x = 16              # number of hidden units in each layer
-    y = 0.9             # network connectivity
+    y = 0.7             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
@@ -70,5 +70,5 @@ if __name__ == '__main__':
 
     approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable).to(device)
 
-    for param in approx_bnn.parameters():
-        print(param.data)
+    for name, params in approx_bnn.named_parameters():
+        print(name, params.data)

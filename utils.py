@@ -66,6 +66,7 @@ class BNN_Dataset(Dataset):
         label = self.labels[idx,:]
         return input, label
 
+
 def visualise_prediction(y, y_hat, reshape='square'):
     '''
     Visualise and compare the prediction of a neuronal firing pattern in a colour map.
@@ -156,7 +157,7 @@ def eval(model, test_loader, criterion):
 
         eval_loss = 0
 
-        for i, (X, Y) in enumerate(iter(test_loader)):
+        for _, (X, Y) in enumerate(iter(test_loader)):
             
             Y_hat = model(X)
             loss = criterion(Y_hat, Y)
@@ -164,6 +165,7 @@ def eval(model, test_loader, criterion):
             eval_loss += loss.item()
     
     return eval_loss
+
 
 def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     '''

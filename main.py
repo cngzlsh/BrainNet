@@ -15,7 +15,7 @@ X_train, Y_train = load_data('./data/', 'train.pkl')
 X_test, Y_test = load_data('./data/', 'test.pkl')
 
 batch_size = 50    # number of data points in each mini-batch
-n_train = 5000    # number of data used, from 1 to len(X_train)
+n_train = 10000    # number of data used, from 1 to len(X_train)
 n_epochs = 20      # number of training epochs
 
 # deep learning model
@@ -28,13 +28,15 @@ criterion = nn.MSELoss()
 
 if __name__ == '__main__':
 
+    v_idx = np.random.randint(0, len(Y_test)) # a random label in the test set to visualise
+
     train_dataset = BNN_Dataset(X_train[:n_train], Y_train[:n_train])
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
 
     test_dataset = BNN_Dataset(X_test, Y_test)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    visualise_prediction(Y_test[231,:], DNN(X_test[231,:]))
+    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
 
     train_losses, eval_losses = train(
         model=DNN,
@@ -44,4 +46,4 @@ if __name__ == '__main__':
     
     plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')
 
-    visualise_prediction(Y_test[231,:], DNN(X_test[231,:]))
+    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
