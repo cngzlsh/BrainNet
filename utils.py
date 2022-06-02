@@ -4,14 +4,14 @@ import os
 
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 sns.set(font_scale=1.2)
-
-from torch.utils.data import Dataset, DataLoader
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 def save_data(X, Y, path, filename):
     '''
@@ -92,9 +92,8 @@ def visualise_prediction(y, y_hat, reshape='square'):
 
 def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False):
     '''
-    Main training function. Iterates through training set in mini batches, updates gradients and compute loss
+    Main training function. Iterates through training set in mini batches, updates gradients and compute loss.
     '''
-    
     start = time.time()
 
     eval_losses, train_losses = [], []
@@ -158,7 +157,7 @@ def eval(model, test_loader, criterion):
     
     return eval_loss
 
-def plot_loss_curve(train_losses, eval_losses, loss_func='MSE loss'):
+def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     n_epochs = len(train_losses)
     
     plt.figure(figsize=(12,6))
