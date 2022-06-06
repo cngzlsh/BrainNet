@@ -46,7 +46,7 @@ class FeedForwardApproximateBNN(nn.Module):
 
 class RecurrentApproximateBNN(nn.Module):
     '''
-    An approximately biological network with recurrent
+    An approximately biological network with recurrent connections
     '''
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False):
         super().__init__()
@@ -55,7 +55,36 @@ class RecurrentApproximateBNN(nn.Module):
         pass
 
 class ResidualApproximateBNN(nn.Module):
-    pass
+    def __init__(self, x, y, z, input_dim, output_dim, residual, transfer_function=nn.ReLU(), bias=True, trainable=False):
+        super().__init__()
+
+        self.residual_out, self.residual_in = residual
+
+        self.input_layer = nn.Linear(input_dim, x, bias=bias)
+        self.transfer_function = transfer_function
+
+        self.hidden_layers = []
+        for _ in range(1, z+1):
+            self.hidden_layers.append(nn.Linear(x, x, bias=True))
+        
+        self.output_layer = nn.Linear(x, output_dim, bias=True)
+
+    def forward(self, x):
+        x = self.input_layer(x)
+        x = self.transfer_function(x)
+
+        for i, layer in enumerate(self.hidden_layers):
+            if i == self.residual_in:
+                x += temp
+
+            x = layer(x)
+            x = self.transfer_function(x)
+
+            if i == self.residual_out:
+                temp = x
+
+        return x
+
 
 if __name__ == '__main__':
     x = 16              # number of hidden units in each layer

@@ -34,8 +34,8 @@ def load_data(path, filename):
         X, Y = pickle.load(f)
     f.close()
 
-    X.to(device)
-    Y.to(device)
+    X = X.to(device)
+    Y = Y.to(device)
 
     return X, Y
 
@@ -90,10 +90,12 @@ def visualise_prediction(y, y_hat, reshape='square'):
     
     plt.subplot(121)
     plt.imshow(y_r)
+    plt.axis('off')
     plt.title('True firing pattern')
 
     plt.subplot(122)
     plt.imshow(y_hat_r)
+    plt.axis('off')
     plt.title('Predicted firing pattern')
 
     plt.show()

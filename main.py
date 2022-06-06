@@ -16,7 +16,7 @@ X_test, Y_test = load_data('./data/', 'test.pkl')
 
 batch_size = 50    # number of data points in each mini-batch
 n_train = 10000    # number of data used, from 1 to len(X_train)
-n_epochs = 20      # number of training epochs
+n_epochs = 50      # number of training epochs
 
 # deep learning model
 DNN = FeedForwardDNN1(input_dim=16, hidden_dim=64, n_layers=4, output_dim=16).to(device)

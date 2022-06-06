@@ -1,5 +1,7 @@
+from tkinter import Y
+from sklearn import gaussian_process
 from approx_bnns import *
-from utils import save_data
+from utils import *
 
 import torch
 import torch.nn as nn
@@ -42,7 +44,7 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
     :param num_inputs:          number of datapoints to generate
     :param firing_prob:         firing probability of presynaptic neurons,
                                 scalar or numpy array (if different for each input neuron)
-    :param gaussian_noise:      (mean, std), whether to add noise to outputs. Default false
+    :param gaussian_noise:      (mean, std), whether to add noise to outputs. Default False
     :return:
     X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
     Y:                          list of output firing patterns
@@ -51,18 +53,18 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
     if isinstance(firing_prob, float):
         firing_prob = (torch.ones(input_dim) * firing_prob).to(device)
     else:
-        firing_prob = torch.Tensor([firing_prob]).to(device)
+        firing_prob = firing_prob.to(device)
     
     assert firing_prob.shape == torch.Size([input_dim]), 'Number of firing rates is not equal to the number of input neurons'
     assert torch.min(firing_prob) > 0, 'Firing probability must be between 0 and 1'
     assert torch.max(firing_prob) < 1, 'Firing probability must be between 0 and 1'
 
-    X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input]))
+    X = 2 * dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input])) - 1
     Y = BNN(X)
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
-        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape)
+        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).cuda()[:,:,0]
 
     return X.cpu(), Y.cpu()
 
@@ -81,11 +83,12 @@ if __name__ == '__main__':
     num_train_input = 10000
     num_test_input = 1000
     firing_prob = 0.5
+    gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
     approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob)
+    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
     save_data(X_train, Y_train, './data/', 'train.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob)
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
     save_data(X_test, Y_test, './data/', 'test.pkl')
