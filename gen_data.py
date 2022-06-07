@@ -64,7 +64,7 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
-        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).cuda()[:,:,0]
+        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
     return X.cpu(), Y.cpu()
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
     X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
-    save_data(X_train, Y_train, './data/', f'train_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')
+    save_data(X_train, Y_train, './data/', f'train_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_train_input}.pkl')
 
     X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
     save_data(X_test, Y_test, './data/', f'test_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')

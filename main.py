@@ -11,8 +11,8 @@ np.random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # load data generated from approximate BNN
-X_train, Y_train = load_data('./data/', 'train.pkl')
-X_test, Y_test = load_data('./data/', 'test.pkl')
+X_train, Y_train = load_data('./data/', 'train_abnn_16_256_0.8_4_16_0.5_10000.pkl')
+X_test, Y_test = load_data('./data/', 'test_abnn_16_256_0.8_4_16_0.5_1000.pkl')
 
 batch_size = 50    # number of data points in each mini-batch
 n_train = 10000    # number of data used, from 1 to len(X_train)

@@ -71,5 +71,5 @@ if __name__ == '__main__':
     # angles: sampled uniformly
     phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_data_points]))
 
-    for i in tqdm(range(n_data_points)):
+    for i in range(n_data_points):
         output = network.population_firing(ds[i], phis[i])
