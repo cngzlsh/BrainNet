@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+from utils import plot_bvc_firing_field
 
 torch.manual_seed(1234)
 
@@ -46,13 +47,13 @@ class BVCNetwork:
         self.threshold = threshold
         self.non_linearity = non_linearity
     
-    def population_firing(self, d, phi):
-        firing_rates = torch.Tensor([bvc.obtain_firing_rate(d=d, phi=phi) for bvc in self.BVCs])
-        thresholded_rate = torch.sum(firing_rates) - self.threshold
+    def obtain_firing_rate(self, d, phi):
+        firing_rates = torch.stack([bvc.obtain_firing_rate(d=d, phi=phi) for bvc in self.BVCs], dim=0)
+        thresholded_rate = torch.sum(firing_rates, dim=0) - self.threshold
         return self.coeff * self.non_linearity(thresholded_rate)
 
 if __name__ == '__main__':
-    n_cells = 20          # number of BVCs to simulate
+    n_cells = 8          # number of BVCs to simulate
     n_data_points = 10000   # number of data points to simulate
 
     # BVC preferred distances ~ Uniform(0, 10)
@@ -66,10 +67,15 @@ if __name__ == '__main__':
     BVCs = [BVC(r=preferred_distances[i],theta=preferred_orientations[i], sigma_rad=sigma_rads[i], sigma_ang=sigma_angs[i]) for i in range(n_cells)]
     network = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0.1)
 
+    # visualise the firing field of the first BVC and the whole place field
+    plot_bvc_firing_field(BVCs[0])
+    plot_bvc_firing_field(network)
+
     # distances: maybe use a truncated Gaussian?
     ds = dist.Normal(loc=3, scale=1).sample(torch.Size([n_data_points]))
     # angles: sampled uniformly
     phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_data_points]))
 
+
     for i in range(n_data_points):
-        output = network.population_firing(ds[i], phis[i])
+        output = network.obtain_firing_rate(ds[i], phis[i])

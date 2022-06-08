@@ -186,3 +186,17 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
 
     plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
     plt.show()
+
+
+def plot_bvc_firing_field(bvc, max_d=10, n=150):
+    rads = np.linspace(-np.pi, np.pi, n)
+    ds = np.linspace(0, max_d, n)
+
+    rads_mat, ds_mat = np.meshgrid(rads, ds)
+
+    plt.figure(figsize=(4,4))
+    plt.axes(projection='polar')
+
+    firing_rates = bvc.obtain_firing_rate(ds_mat, rads_mat)
+    plt.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
+    plt.show()
