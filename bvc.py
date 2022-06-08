@@ -8,7 +8,6 @@ torch.manual_seed(1234)
 class BVC:
     '''
     A boundary vector cell with preferred distance and angle
-    Firing rate is proportional to product of two gaussians centerred at the preferred distance and angle
     '''
     def __init__(self, r, theta, sigma_rad, sigma_ang, scaling_factor=1) -> None:
         self.r = torch.Tensor([r])
@@ -18,6 +17,11 @@ class BVC:
         self.scaling_factor = scaling_factor
 
     def obtain_firing_rate(self, d, phi):
+        '''
+        Computes the firing of BVC given a current distance and angle to a boundary.
+        Firing rate is proportional to product of two gaussians centerred at the preferred distance and angle
+        Vectorised: d and phi can be arrays or matricesd
+        '''
         if isinstance(self.sigma_rad, torch.Tensor):
             sigma_rad = self.sigma_rad
         else:
@@ -35,6 +39,7 @@ class BVC:
         
         return unscaled_firing_rate * self.scaling_factor
     
+
 class BVCNetwork:
     '''
     A network of boundary vector cells
@@ -52,9 +57,10 @@ class BVCNetwork:
         thresholded_rate = torch.sum(firing_rates, dim=0) - self.threshold
         return self.coeff * self.non_linearity(thresholded_rate)
 
+
 if __name__ == '__main__':
-    n_cells = 8          # number of BVCs to simulate
-    n_data_points = 10000   # number of data points to simulate
+    n_cells = 8             # number of BVCs to simulate
+    n_data_points = 10000   # number of data points to generate
 
     # BVC preferred distances ~ Uniform(0, 10)
     preferred_distances = dist.uniform.Uniform(low=-0, high=10).sample(torch.Size([n_cells]))
@@ -71,11 +77,10 @@ if __name__ == '__main__':
     plot_bvc_firing_field(BVCs[0])
     plot_bvc_firing_field(network)
 
-    # distances: maybe use a truncated Gaussian?
+    # distances to boundary: maybe use a truncated Gaussian?
     ds = dist.Normal(loc=3, scale=1).sample(torch.Size([n_data_points]))
-    # angles: sampled uniformly
+    # angles to boundary: sampled uniformly
     phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_data_points]))
-
 
     for i in range(n_data_points):
         output = network.obtain_firing_rate(ds[i], phis[i])

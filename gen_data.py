@@ -1,6 +1,7 @@
 from tkinter import Y
 from sklearn import gaussian_process
 from approx_bnns import *
+from bvc import *
 from utils import *
 
 import torch
@@ -67,6 +68,10 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
     return X.cpu(), Y.cpu()
+
+
+def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
+    pass
 
 
 if __name__ == '__main__':
