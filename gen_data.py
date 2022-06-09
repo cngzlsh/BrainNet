@@ -71,12 +71,21 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
 
 
 def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
-    pass
+    
+    BVCs = [BVC(r= preferred_distances[i], theta=preferred_orientations[i], sigma_rad=sigma_rads[i], sigma_ang=sigma_angs[i], scaling_factor=1) for i in range(n_cells)]
+    model = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0, non_linearity=nn.ReLU())
+
+    ds = dist.uniform.Uniform(low=0, high=10).sample(sample_shape=torch.Size([n_data_points]))
+    phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(sample_shape=torch.Size([n_data_points]))
+
+    X = torch.stack((ds, phis), dim=-1)
+    Y = model.obtain_firing_rate(ds, phis)[:, None]
+    return X.cpu(), Y.cpu()
 
 
 if __name__ == '__main__':
     x = 256             # number of hidden units in each layer
-    y = 0.8             # network connectivity
+    y = 0.5             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
@@ -92,8 +101,25 @@ if __name__ == '__main__':
 
     approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
+    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=False)
     save_data(X_train, Y_train, './data/', f'train_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_train_input}.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=False)
     save_data(X_test, Y_test, './data/', f'test_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')
+
+
+    # n_cells = 8             # number of BVCs to simulate
+    # num_train_input = 10000
+    # num_test_input = 1000
+
+    # # BVC preferred distances ~ Uniform(0, 10)
+    # preferred_distances = dist.uniform.Uniform(low=0, high=10).sample(torch.Size([n_cells]))
+    # # BVC preferred angles ~ Uniform(-pi, pi)
+    # preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
+    # sigma_rads = torch.ones(n_cells)
+    # sigma_angs = torch.ones(n_cells)
+
+    # X_train, Y_train = generate_bvc_network_firing_pattern(n_data_points=num_train_input, n_cells=n_cells, preferred_distances=preferred_distances, preferred_orientations=preferred_orientations, sigma_rads=sigma_rads, sigma_angs=sigma_angs)
+    # save_data(X_train, Y_train, './data/', f'train_bvc.pkl')
+    # X_test, Y_test = generate_bvc_network_firing_pattern(n_data_points=num_test_input, n_cells=n_cells, preferred_distances=preferred_distances, preferred_orientations=preferred_orientations, sigma_rads=sigma_rads, sigma_angs=sigma_angs)
+    # save_data(X_test, Y_test, './data/', f'test_bvc.pkl')

@@ -86,8 +86,6 @@ class ResidualApproximateBNN(nn.Module):
         return x
 
 
-
-
 if __name__ == '__main__':
     x = 16              # number of hidden units in each layer
     y = 0.7             # network connectivity

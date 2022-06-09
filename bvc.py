@@ -12,8 +12,8 @@ class BVC:
     def __init__(self, r, theta, sigma_rad, sigma_ang, scaling_factor=1) -> None:
         self.r = torch.Tensor([r])
         self.theta = torch.Tensor([theta])
-        self.sigma_rad = sigma_rad # can be a lambda function
-        self.sigma_ang = sigma_ang # can be a lambda function
+        self.sigma_rad = sigma_rad   # can be a lambda function
+        self.sigma_ang = sigma_ang   # can be a lambda function
         self.scaling_factor = scaling_factor
 
     def obtain_firing_rate(self, d, phi):
@@ -59,15 +59,14 @@ class BVCNetwork:
 
 
 if __name__ == '__main__':
-    n_cells = 8             # number of BVCs to simulate
-    n_data_points = 10000   # number of data points to generate
+    n_cells = 8   # number of BVCs to simulate
 
     # BVC preferred distances ~ Uniform(0, 10)
     preferred_distances = dist.uniform.Uniform(low=-0, high=10).sample(torch.Size([n_cells]))
     # BVC preferred angles ~ Uniform(-pi, pi)
     preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
     sigma_rads = torch.ones(n_cells)
-    sigma_angs = torch.ones(n_cells)
+    sigma_angs = torch.ones(n_cells) * 0.2
 
     # initialise BVCS and network
     BVCs = [BVC(r=preferred_distances[i],theta=preferred_orientations[i], sigma_rad=sigma_rads[i], sigma_ang=sigma_angs[i]) for i in range(n_cells)]
@@ -76,11 +75,3 @@ if __name__ == '__main__':
     # visualise the firing field of the first BVC and the whole place field
     plot_bvc_firing_field(BVCs[0])
     plot_bvc_firing_field(network)
-
-    # distances to boundary: maybe use a truncated Gaussian?
-    ds = dist.Normal(loc=3, scale=1).sample(torch.Size([n_data_points]))
-    # angles to boundary: sampled uniformly
-    phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_data_points]))
-
-    for i in range(n_data_points):
-        output = network.obtain_firing_rate(ds[i], phis[i])

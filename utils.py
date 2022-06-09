@@ -109,7 +109,8 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     eval_losses, train_losses = [], []
 
     init_eval_loss = eval(model, test_loader, criterion)
-    print(f'Initial eval loss: {init_eval_loss}')
+    if verbose:
+        print(f'Initial eval loss: {init_eval_loss}')
 
     for epoch in range(num_epochs):
         model.train()
@@ -144,7 +145,8 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     
     hrs, mins, secs = elapsed_time(start, time.time())
 
-    print(f'Training completed with final epoch loss {epoch_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+    if verbose:
+        print(f'Training completed with final epoch loss {epoch_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
     return train_losses, eval_losses
 
 
