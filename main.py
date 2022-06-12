@@ -27,7 +27,7 @@ def param_grid_search(hidden_dims = [2, 4, 8, 16, 32, 64, 128, 256], n_layerss =
         for n_layers in n_layerss:
 
             # deep learning model
-            DNN = FeedForwardDNN1(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
+            DNN = FeedForwardDNN(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
 
             # training parameters
             optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
@@ -60,6 +60,26 @@ if __name__ == '__main__':
     test_dataset = BNN_Dataset(X_test, Y_test)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
+    # deep learning model
+    DNN = FeedForwardDNN(input_dim=16, hidden_dim=128, n_layers=2, output_dim=16).to(device)
+
+    # training parameters
+    optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
+    criterion = nn.MSELoss()    
+
+    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
+
+    train_losses, eval_losses = train(
+        model=DNN,
+        train_loader=train_dataloader, test_loader=test_dataloader,
+        optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+        verbose=True, force_stop=False)
     
-    final_eval_losses = param_grid_search()
-    print(final_eval_losses)
+    # plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')
+
+    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
+
+    # predicting the mean
+    mean = torch.mean(Y_test)
+    assert False
+

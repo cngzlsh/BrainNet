@@ -59,7 +59,7 @@ class BVCNetwork:
 
 
 if __name__ == '__main__':
-    n_cells = 8   # number of BVCs to simulate
+    n_cells = 20 # number of BVCs to simulate
 
     # BVC preferred distances ~ Uniform(0, 10)
     preferred_distances = dist.uniform.Uniform(low=-0, high=10).sample(torch.Size([n_cells]))

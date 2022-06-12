@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class FeedForwardDNN1(nn.Module):
+class FeedForwardDNN(nn.Module):
     '''
     Feed-forward deep neural network, resembling the structure of FeedForwardApproximateBNN, but no dropouts
     '''

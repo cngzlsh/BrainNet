@@ -189,7 +189,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     plt.show()
 
 
-def plot_bvc_firing_field(bvc, max_d=10, n=150):
+def plot_bvc_firing_field(bvc, max_d=10, n=1000):
     rads = np.linspace(-np.pi, np.pi, n)
     ds = np.linspace(0, max_d, n)
 
