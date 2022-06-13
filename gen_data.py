@@ -12,29 +12,6 @@ seed = 1234
 torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False):
-    """
-    Loads an approximate BNN model
-    :param x:                   number of hidden units of the approximate biological network
-    :param y:                   connectivity of network
-    :param z:                   number of layers of the biological network 
-    :param input_dim:           input dimension
-    :param output_dim:          output dimension
-    :param transfer_function:   transfer function used in approximate bnn
-    :param bias:                whether to use bias in forward layers
-    :param trainable:           whether the approximate network is trainable
-    :param state_dict:          file path to saved model weights, if applicable
-    :return:
-    approx_bnn:                 loaded MLP
-    """
-    approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function, bias=bias, trainable=trainable).to(device)
-    approx_bnn.to(device)
-
-    if state_dict:
-        approx_bnn.load_state_dict(torch.load(state_dict))
-
-    return approx_bnn
-
 
 def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gaussian_noise=False):
     """
@@ -90,7 +67,7 @@ if __name__ == '__main__':
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
     transfer_function = nn.ReLU() 
-    print(f'Network connectivity: {x * y * z}')
+    residual_in = [False, False, 1, 2]
 
     input_dim = 16
     output_dim = 16
@@ -99,13 +76,14 @@ if __name__ == '__main__':
     firing_prob = 0.5
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
-    approx_bnn = load_BNN(x, y, z, input_dim, output_dim, transfer_function, bias, trainable, state_dict=False)
+    approx_bnn = ResidualApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, residual_in=residual_in).to(device)
+
 
     X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'train_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_train_input}.pkl')
+    save_data(X_train, Y_train, './data/', f'train_abnn_resid_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_train_input}.pkl')
 
     X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'test_abnn_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')
+    save_data(X_test, Y_test, './data/', f'test_abnn_resid_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')
 
 
     # n_cells = 8             # number of BVCs to simulate

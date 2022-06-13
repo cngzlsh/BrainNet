@@ -20,36 +20,6 @@ n_train = 10000    # number of data used, from 1 to len(X_train)
 n_epochs = 25      # number of training epochs
 
 
-def param_grid_search(hidden_dims = [2, 4, 8, 16, 32, 64, 128, 256], n_layerss = [1, 2, 3, 4, 5, 6, 7, 8]):
-    final_eval_losses =[]
-
-    for hidden_dim in hidden_dims:
-        for n_layers in n_layerss:
-
-            # deep learning model
-            DNN = FeedForwardDNN(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
-
-            # training parameters
-            optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-            criterion = nn.MSELoss()    
-
-            # visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
-
-            train_losses, eval_losses = train(
-                model=DNN,
-                train_loader=train_dataloader, test_loader=test_dataloader,
-                optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
-                verbose=False, force_stop=False)
-            
-            # plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')
-
-            # visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
-            print(f'{n_layers} layers, {hidden_dim} hidden units, final eval loss: {eval_losses[-1]}')
-            final_eval_losses.append(eval_losses[-1])
-    
-    return final_eval_losses
-
-
 if __name__ == '__main__':
 
     v_idx = np.random.randint(0, len(Y_test)) # a random label in the test set to visualise
@@ -80,6 +50,5 @@ if __name__ == '__main__':
     visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
 
     # predicting the mean
-    mean = torch.mean(Y_test)
+    mean = torch.mean(Y_test, dim=0)
     assert False
-

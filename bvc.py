@@ -63,6 +63,7 @@ if __name__ == '__main__':
 
     # BVC preferred distances ~ Uniform(0, 10)
     preferred_distances = dist.uniform.Uniform(low=-0, high=10).sample(torch.Size([n_cells]))
+    
     # BVC preferred angles ~ Uniform(-pi, pi)
     preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
     sigma_rads = torch.ones(n_cells)

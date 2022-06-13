@@ -46,7 +46,7 @@ def elapsed_time(start, end):
     secs = end - start
     mins = int(secs / 60)
     hrs = int(mins / 60)
-    return hrs, mins % 60, secs % 60
+    return hrs, mins % 60, int(secs % 60)
 
 
 class BNN_Dataset(Dataset):
@@ -186,6 +186,31 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     plt.ylabel(loss_func)
 
     plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
+    plt.show()
+
+
+def find_argmin_in_matrix(mat):
+    '''
+    Find the row and coloumn of the smallest element in a matrix
+    '''
+    nr, nc = mat.shape
+    return int(np.argmin(mat)/nc), np.argmin(mat) - int(np.argmin(mat)/nc) * nc
+
+
+def plot_3d_scatter(x, y, z, x_label, y_label, z_label):
+    xyz = np.zeros([len(x)*len(y), 3])
+    for i in range(len(x)):
+        for j in range(len(y)):
+            xyz[i*len(x)+j,:] = np.array([x[i], y[j], z[i,j]])
+    
+    plt.figure(figsize=(12,10))
+    ax = plt.axes(projection='3d')
+    
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt3d = ax.scatter(xyz[:,0], xyz[:,1], xyz[:,2], c=xyz[:,2])
+    cbar = plt.colorbar(plt3d)
+    cbar.set_label(z_label)
     plt.show()
 
 
