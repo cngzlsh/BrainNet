@@ -72,14 +72,14 @@ if __name__ == '__main__':
     output_dim = 16
     num_train = 10000
     num_test = 1000
-    num_valid = 1000
+    num_valid = 4000
     firing_prob = 0.5
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
     approx_bnn = FeedForwardApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim).to(device)
 
     X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
-    save_data(X_train, Y_train, './data/', f'train_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn..pkl')
+    save_data(X_train, Y_train, './data/', f'train_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn.pkl')
 
     X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
     save_data(X_test, Y_test, './data/', f'test_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn.pkl')
