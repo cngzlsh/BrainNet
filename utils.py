@@ -11,7 +11,6 @@ import seaborn as sns
 sns.set(font_scale=1.2)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 def save_data(X, Y, path, filename):
     '''
     Saves synthetic neuron firing data to pickle file
@@ -198,6 +197,9 @@ def find_argmin_in_matrix(mat):
 
 
 def plot_3d_scatter(x, y, z, x_label, y_label, z_label):
+    '''
+    Produces 3d scatter plot
+    '''
     xyz = np.zeros([len(x)*len(y), 3])
     for i in range(len(x)):
         for j in range(len(y)):

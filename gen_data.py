@@ -27,7 +27,6 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
     X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
     Y:                          list of output firing patterns
     """
-    
     if isinstance(firing_prob, float):
         firing_prob = (torch.ones(input_dim) * firing_prob).to(device)
     else:
@@ -71,20 +70,22 @@ if __name__ == '__main__':
 
     input_dim = 16
     output_dim = 16
-    num_train_input = 10000
-    num_test_input = 1000
+    num_train = 10000
+    num_test = 1000
+    num_valid = 1000
     firing_prob = 0.5
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
-    approx_bnn = ResidualApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, residual_in=residual_in).to(device)
+    approx_bnn = FeedForwardApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim).to(device)
 
+    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
+    save_data(X_train, Y_train, './data/', f'train_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn..pkl')
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train_input, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'train_abnn_resid_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_train_input}.pkl')
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
+    save_data(X_test, Y_test, './data/', f'test_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test_input, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'test_abnn_resid_{input_dim}_{x}_{y}_{z}_{output_dim}_{firing_prob}_{num_test_input}.pkl')
-
+    X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_valid, firing_prob=firing_prob, gaussian_noise=gaussian_noise)
+    save_data(X_valid, Y_valid, './data/', f'valid_abnn_ff_{x}_{y}_{z}_{firing_prob}_gn.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000
