@@ -9,6 +9,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class FeedForwardApproximateBNN(nn.Module):
     '''
     A feed-forward approximately biological network
+
+    :param x:               hidden units in each layer
+    :param y:               probability of randomly disabling weight (connection between each two neurons)
+    :param z:               number of hidden layers
     '''
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False) -> None:
         super().__init__()
@@ -49,7 +53,10 @@ class FeedForwardApproximateBNN(nn.Module):
 class ResidualApproximateBNN(nn.Module):
     '''
     A feed-forward approximately biological network with additional skip (residual) connections
-
+    
+    :param x:               hidden units in each layer
+    :param y:               probability of randomly disabling weight (connection between each two neurons)
+    :param z:               number of hidden layers
     :param residual_in:     list of len(z), denoting which layer (other than the prev layer) the input comes from. False if no skip connection as input
     '''
     def __init__(self, x, y, z, input_dim, output_dim, residual_in, transfer_function=nn.ReLU(), bias=True, trainable=False):
@@ -135,13 +142,19 @@ class ResidualApproximateBNN(nn.Module):
 class RecurrentApproximateBNN(nn.Module):
     '''
     An approximately biological network with recurrent connections: hidden L4 -> hidden L1
+
+    :param x:               hidden units in each layer
+    :param y:               probability of randomly disabling weight (connection between each two neurons)
+    :param z:               number of hidden layers
     :param recurrent_dim:   dimension of recurrent state. By default same as x
     '''
     def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False, recurrent_dim=-1):
         super().__init__()
         
-        if recurrent_dim == -1:
-            recurrent_dim = x
+        if recurrent_dim == -1: # if recurrent state dimension unspecified, default to same as hidden dim
+            self.recurrent_dim = x
+        else:
+            self.recurrent_dim = recurrent_dim
 
         self.transfer_function = transfer_function
         self.output_dim = output_dim
@@ -151,7 +164,7 @@ class RecurrentApproximateBNN(nn.Module):
 
         # hidden layers, where the first hidden layer also takes in recurrent state
         self.hidden_layers = nn.Sequential()
-        self.hidden_layers.add_module('hidden_1', nn.Linear(x + recurrent_dim, x, bias=bias))
+        self.hidden_layers.add_module('hidden_1', nn.Linear(x + self.recurrent_dim, x, bias=bias))
         self.hidden_layers.add_module('relu_1', self.transfer_function)
         for hidden_idx in range(2, z+1):
             self.hidden_layers.add_module(f'hidden_{hidden_idx}', nn.Linear(x, x, bias=bias))
@@ -161,10 +174,7 @@ class RecurrentApproximateBNN(nn.Module):
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
 
         # projection to hidden state
-        self.recurrent_connection = nn.Linear(x, recurrent_dim, bias=bias)
-
-        # initialise recurrent state
-        self.recurrent_state = torch.zeros(recurrent_dim).to(device)
+        self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
@@ -203,17 +213,22 @@ class RecurrentApproximateBNN(nn.Module):
         '''
         Passing through RNN in a temporal sequence.
         '''
-        batch_size, _ = x.shape
-        y = torch.zeros([batch_size, self.output_dim]).to(device)
-        for i in range(batch_size):
-            
-            hi = self.input_layer(x[i])
-            hi = self.transfer_function(hi)
+        batch_size, time_steps, _ = x.shape # (batch_size, time_step, input_dim)
 
-            hi = torch.concat((hi, self.recurrent_state), dim=0)
+        # initialise recurrent state and output tensor
+        self.recurrent_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
+        y = torch.zeros([batch_size, time_steps, self.output_dim]).to(device)
+
+
+        for i in range(time_steps):
+            
+            hi = self.input_layer(x[:,i,:]) # (batch_size, hidden_dim)
+            hi = self.transfer_function(hi) # (batch_size, hidden_dim)
+
+            hi = torch.concat((hi, self.recurrent_state), dim=-1)
             hi = self.hidden_layers(hi)
 
-            y[i,:] = self.output_layer(hi)
+            y[:,i,:] = self.output_layer(hi)
             
             self.recurrent_state = self.recurrent_connection(hi)
         
@@ -233,6 +248,7 @@ if __name__ == '__main__':
     output_dim = 16
 
     approx_bnn = RecurrentApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable)
-
+    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[2,100,16])
+    approx_bnn(X)
     for name, params in approx_bnn.named_parameters():
         print(name, params.data.shape)
