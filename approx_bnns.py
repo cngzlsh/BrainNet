@@ -211,27 +211,28 @@ class RecurrentApproximateBNN(nn.Module):
     
     def forward(self, x):
         '''
-        Passing through RNN in a temporal sequence.
+        Pass a temporal sequence through RNN. input is of shape (batch_size, num_time_steps, input_dim)
         '''
-        batch_size, time_steps, _ = x.shape # (batch_size, time_step, input_dim)
+        batch_size, time_steps, _ = x.shape
 
         # initialise recurrent state and output tensor
         self.recurrent_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
         y = torch.zeros([batch_size, time_steps, self.output_dim]).to(device)
 
-
-        for i in range(time_steps):
+        for t in range(time_steps):
             
-            hi = self.input_layer(x[:,i,:]) # (batch_size, hidden_dim)
-            hi = self.transfer_function(hi) # (batch_size, hidden_dim)
+            temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
+            temp = self.transfer_function(temp) # (batch_size, hidden_dim)
 
-            hi = torch.concat((hi, self.recurrent_state), dim=-1)
-            hi = self.hidden_layers(hi)
+            temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
+            temp = self.hidden_layers(temp) # (batch_size, hidden_dim)
 
-            y[:,i,:] = self.output_layer(hi)
+            yt = self.output_layer(temp) # (batch_size, output_dim)
+            y[:,t,:] = self.transfer_function(yt)
             
-            self.recurrent_state = self.recurrent_connection(hi)
-        
+            ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
+            self.recurrent_state = self.transfer_function(ht)
+
         return y
 
 
