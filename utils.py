@@ -196,7 +196,7 @@ def find_argmin_in_matrix(mat):
     return int(np.argmin(mat)/nc), np.argmin(mat) - int(np.argmin(mat)/nc) * nc
 
 
-def plot_3d_scatter(x, y, z, x_label, y_label, z_label):
+def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False):
     '''
     Produces 3d scatter plot
     '''
@@ -213,6 +213,8 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label):
     plt3d = ax.scatter(xyz[:,0], xyz[:,1], xyz[:,2], c=xyz[:,2])
     cbar = plt.colorbar(plt3d)
     cbar.set_label(z_label)
+    if fname:
+        plt.savefig('./figures/' + fname)
     plt.show()
 
 
