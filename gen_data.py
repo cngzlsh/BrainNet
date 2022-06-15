@@ -1,5 +1,3 @@
-from tkinter import Y
-from sklearn import gaussian_process
 from approx_bnns import *
 from bvc import *
 from utils import *
@@ -13,7 +11,13 @@ torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gaussian_noise=False):
+def normalise_data(data):
+    '''
+    Normalises data: subtract mean and divide by std over batch_size dim (dim 0)
+    '''
+    return torch.nan_to_num((data - torch.mean(data, dim=0))/ torch.std(data, dim=0))
+
+def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, time_steps=False, gaussian_noise=False):
     """
     Generates a toy dateset of firing pattern of approximate BNN
     :param model:               MLP, approximate biological network
@@ -31,12 +35,42 @@ def generate_binary_firing_pattern(BNN, input_dim, num_input, firing_prob, gauss
         firing_prob = (torch.ones(input_dim) * firing_prob).to(device)
     else:
         firing_prob = firing_prob.to(device)
+        
     
     assert firing_prob.shape == torch.Size([input_dim]), 'Number of firing rates is not equal to the number of input neurons'
     assert torch.min(firing_prob) > 0, 'Firing probability must be between 0 and 1'
     assert torch.max(firing_prob) < 1, 'Firing probability must be between 0 and 1'
 
-    X = 2 * dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([num_input])) - 1
+    if not time_steps:
+        X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([n_data_points]))
+    elif isinstance(time_steps, int):
+        X = dist.Bernoulli(probs=firing_prob).sample(sample_shape=torch.Size([n_data_points, time_steps]))
+    else:
+        raise ValueError('Temporal must be a time length of integer')
+
+    Y = BNN(X)
+    Y = normalise_data(Y)
+
+    if gaussian_noise is not False:
+        mu, sigma = gaussian_noise
+        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
+
+    return X.cpu(), Y.cpu()
+
+
+def generate_exponential_firing_rates(BNN, input_dim, n_data_points, mean_rates, time_steps=False, gaussian_noise=False):
+    if isinstance(mean_rates, float):
+        mean_rates = (torch.ones(input_dim)).to(device)
+    else:
+        mean_rates.to(device)
+    
+    if not time_steps:
+        X = dist.Exponential(rate=mean_rates).sample(sample_shape=torch.Size([n_data_points]))
+    elif isinstance(time_steps, int):
+        X = dist.Exponential(rate=mean_rates).sample(sample_shape=torch.Size([n_data_points, time_steps]))
+    else:
+        raise ValueError('Temporal must be a time length of integer')
+    
     Y = BNN(X)
 
     if gaussian_noise is not False:
@@ -74,18 +108,19 @@ if __name__ == '__main__':
     num_test = 1000
     num_valid = 4000
     firing_prob = 0.5
+    time_steps = 1000
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
-    approx_bnn = RecurrentApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, recurrent_dim=-1).to(device)
+    approx_bnn = FeedForwardApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, transfer_function=nn.ReLU()).to(device)
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_train, firing_prob=firing_prob, gaussian_noise=False)
-    # save_data(X_train, Y_train, './data/', f'train_abnn_resid_{x}_{y}_{z}_{firing_prob}_gn.pkl')
+    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, firing_prob=firing_prob, gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'abnn_ff_train_{x}_{y}_{z}_{firing_prob}.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_test, firing_prob=firing_prob, gaussian_noise=False)
-    # save_data(X_test, Y_test, './data/', f'test_abnn_resid_{x}_{y}_{z}_{firing_prob}_gn.pkl')
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, firing_prob=firing_prob, gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'abnn_ff_test_{x}_{y}_{z}_{firing_prob}.pkl')
 
-    X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, num_input=num_valid, firing_prob=firing_prob, gaussian_noise=False)
-    # save_data(X_valid, Y_valid, './data/', f'valid_abnn_resid_{x}_{y}_{z}_{firing_prob}_gn.pkl')
+    X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'abnn_ff_valid_{x}_{y}_{z}_{firing_prob}.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000

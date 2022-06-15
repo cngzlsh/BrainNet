@@ -12,8 +12,8 @@ np.random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # load data generated from approximate BNN
-X_train, Y_train = load_data('./data/', 'train_abnn_ff_256_0.5_4_0.5_gn.pkl')
-X_test, Y_test = load_data('./data/', 'test_abnn_ff_256_0.5_4_0.5_gn.pkl')
+X_train, Y_train = load_data('./data/', 'abnn_ff_train_256_0.5_4_0.5.pkl')
+X_test, Y_test = load_data('./data/', 'abnn_ff_test_256_0.5_4_0.5.pkl')
 
 batch_size = 50    # number of data points in each mini-batch
 n_train = 10000    # number of data used, from 1 to len(X_train)
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # deep learning model
-    DNN = FeedForwardDNN(input_dim=16, hidden_dim=128, n_layers=2, output_dim=16).to(device)
+    DNN = FeedForwardDNN(input_dim=16, hidden_dim=64, n_layers=4, output_dim=16).to(device)
 
     # training parameters
     optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
@@ -51,4 +51,3 @@ if __name__ == '__main__':
 
     # predicting the mean
     mean = torch.mean(Y_test, dim=0)
-    assert False

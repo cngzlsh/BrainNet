@@ -37,6 +37,8 @@ class FeedForwardApproximateBNN(nn.Module):
         def apply_connectivity(): # makes the network more biologically plausible
             for layer in self.layers:
                 if isinstance(layer, nn.Linear):
+                    nn.init.normal_(layer.weight, mean=0, std=1)
+                    nn.init.normal_(layer.bias, mean=0, std=1)
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
 
@@ -87,12 +89,16 @@ class ResidualApproximateBNN(nn.Module):
         
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
+            nn.init.normal_(self.input_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.input_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
             self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
 
             # hidden layers
             for layer in self.hidden_layers:
                 if isinstance(layer, nn.Linear):
+                    nn.init.normal_(layer.weight, mean=0, std=1)
+                    nn.init.normal_(layer.bias, mean=0, std=1)
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
 
@@ -101,6 +107,8 @@ class ResidualApproximateBNN(nn.Module):
                         layer.bias.requires_grad = False
             
             # output layer
+            nn.init.normal_(self.output_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
@@ -178,12 +186,16 @@ class RecurrentApproximateBNN(nn.Module):
 
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
+            nn.init.normal_(self.input_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.input_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
             self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
 
             # hidden layers
             for layer in self.hidden_layers:
                 if isinstance(layer, nn.Linear):
+                    nn.init.normal_(layer.weight, mean=0, std=1)
+                    nn.init.normal_(layer.bias, mean=0, std=1)
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
 
@@ -192,6 +204,8 @@ class RecurrentApproximateBNN(nn.Module):
                         layer.bias.requires_grad = False
             
             # output layer
+            nn.init.normal_(self.output_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
@@ -225,9 +239,9 @@ class RecurrentApproximateBNN(nn.Module):
             temp = self.transfer_function(temp) # (batch_size, hidden_dim)
 
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
-            temp = self.hidden_layers(temp) # (batch_size, hidden_dim)
+            temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
 
-            yt = self.output_layer(temp) # (batch_size, output_dim)
+            yt = self.output_layer(temp)         # (batch_size, output_dim)
             y[:,t,:] = self.transfer_function(yt)
             
             ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
@@ -248,8 +262,9 @@ if __name__ == '__main__':
     input_dim = 16
     output_dim = 16
 
-    approx_bnn = RecurrentApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable)
-    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[2,100,16])
-    approx_bnn(X)
+    approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable)
     for name, params in approx_bnn.named_parameters():
-        print(name, params.data.shape)
+        print(name, params.data)
+
+    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[10000,16])
+    approx_bnn(X)

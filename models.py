@@ -22,7 +22,6 @@ class FeedForwardDNN(nn.Module):
 
         # output layer
         self.layers.add_module('output', nn.Linear(hidden_dim, output_dim))
-        self.layers.add_module(f'ReLU_{n_layers+1}', transfer_function)
 
     def forward(self, input_pattern):
         return self.layers(input_pattern)

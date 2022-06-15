@@ -218,7 +218,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False):
     plt.show()
 
 
-def plot_bvc_firing_field(bvc, max_d=10, n=1000):
+def plot_bvc_firing_field(bvc, max_d=2500, n=200):
     rads = np.linspace(-np.pi, np.pi, n)
     ds = np.linspace(0, max_d, n)
 

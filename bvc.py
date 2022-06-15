@@ -8,12 +8,17 @@ torch.manual_seed(1234)
 class BVC:
     '''
     A boundary vector cell with preferred distance and angle
+    Hartley 2000: sigma_ang = 0.2 fixed, sigma_rad = [(peak_dist/beta)+1]*sigma_zero where sigma_zerp speifies sigma for zero distances and
+    beta controls the rate at which sigma_rad increases
+    Defaults - all distances in mm
     '''
-    def __init__(self, r, theta, sigma_rad, sigma_ang, scaling_factor=1) -> None:
+    def __init__(self, r, theta, sigma_zero=122, beta=1830, sigma_ang=0.2, scaling_factor=1) -> None:
         self.r = torch.Tensor([r])
         self.theta = torch.Tensor([theta])
-        self.sigma_rad = sigma_rad   # can be a lambda function
-        self.sigma_ang = sigma_ang   # can be a lambda function
+        self.sigma_zero = sigma_zero        # Hartley 2000: sigZero = 122 mm
+        self.beta = beta                    # Hartley 2000: beta = 1830 mm
+        self.sigma_ang = torch.Tensor([sigma_ang])          # Hartley 2000: angSig = 0.2 rad
+        self.sigma_rad = torch.Tensor([((self.r/self.beta)+1) * self.sigma_zero])
         self.scaling_factor = scaling_factor
 
     def obtain_firing_rate(self, d, phi):
@@ -22,20 +27,10 @@ class BVC:
         Firing rate is proportional to product of two gaussians centerred at the preferred distance and angle
         Vectorised: d and phi can be arrays or matricesd
         '''
-        if isinstance(self.sigma_rad, torch.Tensor):
-            sigma_rad = self.sigma_rad
-        else:
-            sigma_rad = torch.Tensor([self.sigma_rad(d)])
-        
-        if isinstance(self.sigma_ang, torch.Tensor):
-            sigma_ang = self.sigma_ang
-        else:
-            sigma_ang = torch.Tensor([self.sigma_rad(phi)])
-
-        unscaled_firing_rate = torch.exp(-(self.r - d) ** 2 / (2 * sigma_rad ** 2))/ \
-                torch.sqrt(2 * torch.pi * sigma_rad ** 2) * \
-                    torch.exp(-(self.theta - phi) ** 2 / (2 * sigma_ang ** 2))/ \
-                        torch.sqrt(2 * torch.pi * sigma_ang ** 2)
+        unscaled_firing_rate = torch.exp(-(self.r - d) ** 2 / (2 * self.sigma_rad ** 2))/ \
+                torch.sqrt(2 * torch.pi * self.sigma_rad ** 2) * \
+                    torch.exp(-(self.theta - phi) ** 2 / (2 * self.sigma_ang ** 2))/ \
+                        torch.sqrt(2 * torch.pi * self.sigma_ang ** 2)
         
         return unscaled_firing_rate * self.scaling_factor
     
@@ -62,17 +57,15 @@ if __name__ == '__main__':
     n_cells = 20 # number of BVCs to simulate
 
     # BVC preferred distances ~ Uniform(0, 10)
-    preferred_distances = dist.uniform.Uniform(low=-0, high=10).sample(torch.Size([n_cells]))
+    preferred_distances = dist.uniform.Uniform(low=-0, high=2500).sample(torch.Size([n_cells]))
     
     # BVC preferred angles ~ Uniform(-pi, pi)
     preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
-    sigma_rads = torch.ones(n_cells)
-    sigma_angs = torch.ones(n_cells) * 0.2
 
     # initialise BVCS and network
-    BVCs = [BVC(r=preferred_distances[i],theta=preferred_orientations[i], sigma_rad=sigma_rads[i], sigma_ang=sigma_angs[i]) for i in range(n_cells)]
-    network = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0.1)
+    BVCs = [BVC(r=preferred_distances[i],theta=preferred_orientations[i]) for i in range(n_cells)]
+    network = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0)
 
     # visualise the firing field of the first BVC and the whole place field
-    plot_bvc_firing_field(BVCs[0])
+    plot_bvc_firing_field(BVCs[3])
     plot_bvc_firing_field(network)
