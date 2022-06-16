@@ -269,7 +269,9 @@ class ComplexApproximateBNN(nn.Module):
 
         assert len(residual_in) == z
         self.z = z
+        self.output_dim = output_dim
         self.residual_in = residual_in
+        self.recurrent_dim = x if recurrent_dim == -1 else recurrent_dim
         self.transfer_function = transfer_function
 
         # input layer
@@ -292,7 +294,45 @@ class ComplexApproximateBNN(nn.Module):
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
         def apply_connectivity():
-            pass
+             # input layer
+            nn.init.normal_(self.input_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.input_layer.bias, mean=0, std=1)
+            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
+            self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
+
+            # hidden layers
+            for layer in self.hidden_layers:
+                if isinstance(layer, nn.Linear):
+                    nn.init.normal_(layer.weight, mean=0, std=1)
+                    nn.init.normal_(layer.bias, mean=0, std=1)
+                    mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
+                    layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
+
+                    if not trainable:
+                        layer.weight.requires_grad = False
+                        layer.bias.requires_grad = False
+            
+            # output layer
+            nn.init.normal_(self.output_layer.weight, mean=0, std=1)
+            nn.init.normal_(self.output_layer.bias, mean=0, std=1)
+            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
+            self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
+
+            # recurrent connection
+            nn.init.normal_(self.recurrent_connection.weight, mean=0, std=1)
+            nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
+            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
+            self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
+
+            if not trainable:
+                self.input_layer.weight.requires_grad = False
+                self.input_layer.bias.requires_grad = False
+                self.output_layer.weight.requires_grad = False
+                self.output_layer.bias.requires_grad = False
+                self.recurrent_connection.weight.requires_grad = False
+                self.recurrent_connection.bias.requires_grad = False
+        
+        apply_connectivity()
     
     def forward(self, x):
         '''

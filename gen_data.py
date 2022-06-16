@@ -112,16 +112,16 @@ if __name__ == '__main__':
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
-    approx_bnn = RecurrentApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, recurrent_dim=-1, transfer_function=nn.ReLU()).to(device)
+    approx_bnn = ComplexApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim,residual_in=residual_in, recurrent_dim=-1, transfer_function=nn.ReLU()).to(device)
 
     X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'abnn_recur_train_{x}_{y}_{z}_{firing_prob}.pkl')
+    save_data(X_train, Y_train, './data/', f'abnn_cplx_train_{x}_{y}_{z}_{firing_prob}.pkl')
 
     X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'abnn_recur_test_{x}_{y}_{z}_{firing_prob}.pkl')
+    save_data(X_test, Y_test, './data/', f'abnn_cplx_test_{x}_{y}_{z}_{firing_prob}.pkl')
 
     X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'abnn_recur_valid_{x}_{y}_{z}_{firing_prob}.pkl')
+    save_data(X_valid, Y_valid, './data/', f'abnn_cplx_valid_{x}_{y}_{z}_{firing_prob}.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000
