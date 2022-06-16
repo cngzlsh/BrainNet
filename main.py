@@ -18,36 +18,39 @@ X_test, Y_test = load_data('./data/', 'abnn_ff_test_256_0.5_4_0.5.pkl')
 batch_size = 50    # number of data points in each mini-batch
 n_train = 10000    # number of data used, from 1 to len(X_train)
 n_epochs = 25      # number of training epochs
-
+#s 
 
 if __name__ == '__main__':
 
-    v_idx = np.random.randint(0, len(Y_test)) # a random label in the test set to visualise
+    
+    X_train, Y_train = load_data('./data/', 'abnn_recur_train_256_0.5_4_0.5.pkl')
+    X_test, Y_test = load_data('./data/', 'abnn_recur_test_256_0.5_4_0.5.pkl')
+    X_valid, Y_valid = load_data('./data/', 'abnn_recur_valid_256_0.5_4_0.5.pkl')
+
+    batch_size = 200   # number of data points in each mini-batch
+    n_train = 10000    # number of data used, from 1 to len(X_train)
+    n_epochs = 50      # number of training epochs
 
     train_dataset = BNN_Dataset(X_train[:n_train], Y_train[:n_train])
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     test_dataset = BNN_Dataset(X_test, Y_test)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    valid_dataset = BNN_Dataset(X_valid, Y_valid)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
 
     # deep learning model
-    DNN = FeedForwardDNN(input_dim=16, hidden_dim=64, n_layers=4, output_dim=16).to(device)
+    DNN = RecurrentDNN(input_dim=16, hidden_dim=256, n_layers=1, output_dim=16).to(device)
 
     # training parameters
     optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-    criterion = nn.MSELoss()    
+    criterion = nn.MSELoss()
 
-    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
-
-    train_losses, eval_losses = train(
+    train_losses, eval_losses = train_rnn(
         model=DNN,
         train_loader=train_dataloader, test_loader=test_dataloader,
         optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
         verbose=True, force_stop=False)
-    
-    # plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')
 
-    visualise_prediction(Y_test[v_idx,:], DNN(X_test[v_idx,:]))
-
-    # predicting the mean
-    mean = torch.mean(Y_test, dim=0)
+    plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+import torch.nn.functional as F
 
 seed = 1234
 torch.manual_seed(seed)
@@ -69,7 +70,6 @@ class ResidualApproximateBNN(nn.Module):
         self.z = z
         self.residual_in = residual_in
         self.transfer_function = transfer_function
-        self.network_connectivity = x * y * (2 * z - sum([1 if i is not False else 0 for i in residual_in]))
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
@@ -240,6 +240,8 @@ class RecurrentApproximateBNN(nn.Module):
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
             temp = self.transfer_function(temp) # (batch_size, hidden_dim)
 
+            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
+
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
             temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
 
@@ -265,9 +267,80 @@ class ComplexApproximateBNN(nn.Module):
     def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=True, trainable=False):
         super().__init__()
 
+        assert len(residual_in) == z
+        self.z = z
+        self.residual_in = residual_in
+        self.transfer_function = transfer_function
+
+        # input layer
+        self.input_layer = nn.Linear(input_dim, x, bias=bias)
+
+        # store hidden layers in a list
+        self.hidden_layers = nn.ModuleList([])
+        for hidden_idx in range(self.z):
+            if self.residual_in[hidden_idx] == False and hidden_idx != 0: # first layer also takes in recurrent connection
+                # if no residual connection, input_dim = x
+                self.hidden_layers.append(nn.Linear(x, x, bias=bias))
+            else:
+                # if residual connection, input_dim = 2*x
+                self.hidden_layers.append(nn.Linear(2*x, x, bias=bias))
+        
+        # output layer
+        self.output_layer = nn.Linear(x, output_dim, bias=bias)
+
+        # recurrent connection
+        self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
+
+        def apply_connectivity():
+            pass
+    
+    def forward(self, x):
+        '''
+        Pass a temporal sequence through complex BNN. input is of shape (batch_size, num_time_steps, input_dim)
+        '''
+        batch_size, time_steps, _ = x.shape
+
+        # initialise recurrent state and output tensor
+        self.recurrent_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
+        y = torch.zeros([batch_size, time_steps, self.output_dim]).to(device)
+
+        for t in range(time_steps):
+            
+            temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
+            temp = self.transfer_function(temp) # (batch_size, hidden_dim)
+
+            temp_outputs = [None] * (self.z + 1)
+            temp_outputs[0] = temp
+
+            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
+
+            for hidden_idx in range(self.z):
+                
+                if hidden_idx == 0: # first hidden layer receives recurrent connection
+                    temp = torch.concat((temp_outputs[0], self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
+                    temp_outputs[hidden_idx+1] = self.transfer_function(self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
+                
+                else:
+                    if self.residual_in[hidden_idx] is False:
+                        # if there is no skip input, take input from prev layer
+                        temp_input = temp_outputs[hidden_idx]
+                        temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
+                        temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+                    
+                    else:
+                        # if there is skip input, concat the input with the prev layer
+                        temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
+                        temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
+                        temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+
+            self.recurrent_state = self.transfer_function(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
+            y[:,t,:] = self.transfer_function(self.output_layer(temp_outputs[-1]))
+
+        return y
+
 
 if __name__ == '__main__':
-    x = 64              # number of hidden units in each layer
+    x = 256             # number of hidden units in each layer
     y = 0.5             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
@@ -278,9 +351,9 @@ if __name__ == '__main__':
     input_dim = 16
     output_dim = 16
 
-    approx_bnn = FeedForwardApproximateBNN(x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=bias, trainable=trainable)
+    approx_bnn = RecurrentApproximateBNN(x, y, z, input_dim, output_dim, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=bias, trainable=trainable).to(device)
     for name, params in approx_bnn.named_parameters():
         print(name, params.data)
 
-    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[10000,16])
+    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[1, 10,16]).to(device)
     approx_bnn(X)
