@@ -108,20 +108,20 @@ if __name__ == '__main__':
     num_test = 1000
     num_valid = 4000
     firing_prob = 0.5
-    time_steps = 1000
+    time_steps = 100
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
 
-    approx_bnn = FeedForwardApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, transfer_function=nn.ReLU()).to(device)
+    approx_bnn = RecurrentApproximateBNN(x=x, y=y, z=z, input_dim=input_dim, output_dim=output_dim, recurrent_dim=-1, transfer_function=nn.ReLU()).to(device)
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'abnn_ff_train_{x}_{y}_{z}_{firing_prob}.pkl')
+    # X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
+    # save_data(X_train, Y_train, './data/', f'abnn_resid_train_{x}_{y}_{z}_{firing_prob}.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'abnn_ff_test_{x}_{y}_{z}_{firing_prob}.pkl')
+    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
+    # save_data(X_test, Y_test, './data/', f'abnn_resid_test_{x}_{y}_{z}_{firing_prob}.pkl')
 
-    X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'abnn_ff_valid_{x}_{y}_{z}_{firing_prob}.pkl')
-
+    # X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
+    # save_data(X_valid, Y_valid, './data/', f'abnn_resid_valid_{x}_{y}_{z}_{firing_prob}.pkl')
+    assert False
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000
     # num_test_input = 1000

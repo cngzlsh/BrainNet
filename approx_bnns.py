@@ -156,7 +156,7 @@ class RecurrentApproximateBNN(nn.Module):
     :param z:               number of hidden layers
     :param recurrent_dim:   dimension of recurrent state. By default same as x
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False, recurrent_dim=-1):
+    def __init__(self, x, y, z, input_dim, output_dim, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=True, trainable=False):
         super().__init__()
         
         if recurrent_dim == -1: # if recurrent state dimension unspecified, default to same as hidden dim
@@ -210,6 +210,8 @@ class RecurrentApproximateBNN(nn.Module):
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
             # recurrent connection
+            nn.init.normal_(self.recurrent_connection.weight, mean=0, std=1)
+            nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
             self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
 
@@ -248,6 +250,20 @@ class RecurrentApproximateBNN(nn.Module):
             self.recurrent_state = self.transfer_function(ht)
 
         return y
+
+
+class ComplexApproximateBNN(nn.Module):
+    '''
+    An approximately biological network with residual and recurrent connections: hidden L4 -> hidden L1
+
+    :param x:               hidden units in each layer
+    :param y:               probability of randomly disabling weight (connection between each two neurons)
+    :param z:               number of hidden layers
+    :param residual_in:     list of len(z), denoting which layer (other than the prev layer) the input comes from. False if no skip connection as input
+    :param recurrent_dim:   dimension of recurrent state. By default same as x
+    '''
+    def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=True, trainable=False):
+        super().__init__()
 
 
 if __name__ == '__main__':
