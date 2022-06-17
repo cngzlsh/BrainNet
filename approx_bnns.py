@@ -1,3 +1,4 @@
+from pandas import Categorical
 import torch
 import torch.nn as nn
 import torch.distributions as dist
@@ -256,6 +257,22 @@ class RecurrentApproximateBNN(nn.Module):
         return y
 
 
+class RandomActivation(nn.Module):
+    '''
+    Custom non-linearity layer, applies a random non-linearity for each dimension
+    Mimics neuronal network where each neuron has slightly different activation
+    '''
+    def __init__(self, _dim, transfer_functions: list):
+        super().__init__()
+
+        self.transfer_functions = random.choices(transfer_functions, k=_dim)
+        self.dim = _dim
+
+    def forward(self, x):
+        # x: [batch_size, dim]
+        return torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
+
+
 class ComplexApproximateBNN(nn.Module):
     '''
     An approximately biological network with residual and recurrent connections: hidden L4 -> hidden L1
@@ -266,7 +283,7 @@ class ComplexApproximateBNN(nn.Module):
     :param residual_in:     list of len(z), denoting which layer (other than the prev layer) the input comes from. False if no skip connection as input
     :param recurrent_dim:   dimension of recurrent state. By default same as x
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh()], bias=True, trainable=False):
+    def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()], bias=True, trainable=False):
         super().__init__()
 
         assert len(residual_in) == z
@@ -274,7 +291,9 @@ class ComplexApproximateBNN(nn.Module):
         self.output_dim = output_dim
         self.residual_in = residual_in
         self.recurrent_dim = x if recurrent_dim == -1 else recurrent_dim
-        self.transfer_functions = random.choices(transfer_functions, k=z+3) # input, z hidden, output, recurrent
+        self.activations = [RandomActivation(_dim=x, transfer_functions=transfer_functions) for _ in range(z+1)] # input layer and z hidden layers
+        self.recurrent_activation = RandomActivation(_dim = self.recurrent_dim, transfer_functions=transfer_functions)
+        self.output_activation = RandomActivation(_dim=output_dim, transfer_functions=transfer_functions)
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
@@ -295,9 +314,18 @@ class ComplexApproximateBNN(nn.Module):
         # recurrent connection
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
-        def apply_connectivity():
-             # input layer
-            nn.init.normal_(self.input_layer.weight, mean=0, std=1)
+        def apply_connectivity(mixture=(0.75, 0.25), component_mean=(-3,3), component_std=(1,1)):
+            '''
+            Weight initialisation is a mixture of Gaussian, 75% excitatory ~ N(3,3) and 25% inhibitory ~ N(-1,1)
+            with random dropout probability 1-y
+            Bias is initialised as N(0,1)
+            '''
+            mixture_distribution = dist.Categorical(torch.Tensor(mixture))
+            component_distributions = dist.Independent(dist.Normal(torch.Tensor(component_mean),torch.Tensor(component_std)),0)
+            MoG = dist.MixtureSameFamily(mixture_distribution=mixture_distribution, component_distribution=component_distributions)
+
+            # input layer
+            self.input_layer.weight.data = MoG.sample(self.input_layer.weight.data.shape)
             nn.init.normal_(self.input_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
             self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
@@ -305,7 +333,7 @@ class ComplexApproximateBNN(nn.Module):
             # hidden layers
             for layer in self.hidden_layers:
                 if isinstance(layer, nn.Linear):
-                    nn.init.normal_(layer.weight, mean=0, std=1)
+                    layer.weight.data = MoG.sample(layer.weight.data.shape)
                     nn.init.normal_(layer.bias, mean=0, std=1)
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
@@ -315,13 +343,13 @@ class ComplexApproximateBNN(nn.Module):
                         layer.bias.requires_grad = False
             
             # output layer
-            nn.init.normal_(self.output_layer.weight, mean=0, std=1)
+            self.output_layer.weight.data = MoG.sample(self.output_layer.weight.data.shape)
             nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
             # recurrent connection
-            nn.init.normal_(self.recurrent_connection.weight, mean=0, std=1)
+            self.recurrent_connection.weight.data = MoG.sample(self.recurrent_connection.weight.data.shape)
             nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
             self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
@@ -349,7 +377,7 @@ class ComplexApproximateBNN(nn.Module):
         for t in range(time_steps):
             
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
-            temp = self.transfer_functions[0](temp) # (batch_size, hidden_dim)
+            temp = self.activations[0](temp) # (batch_size, hidden_dim)
 
             temp_outputs = [None] * (self.z + 1)
             temp_outputs[0] = temp
@@ -360,26 +388,25 @@ class ComplexApproximateBNN(nn.Module):
                 
                 if hidden_idx == 0: # first hidden layer receives recurrent connection
                     temp = torch.concat((temp_outputs[0], self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
-                    temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
+                    temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
                 
                 else:
                     if self.residual_in[hidden_idx] is False:
                         # if there is no skip input, take input from prev layer
                         temp_input = temp_outputs[hidden_idx]
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                        temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](temp_outputs[hidden_idx+1])
+                        temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
                     
                     else:
                         # if there is skip input, concat the input with the prev layer
                         temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                        temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](temp_outputs[hidden_idx+1])
+                        temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
 
-            self.recurrent_state = self.transfer_functions[-2](self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
-            y[:,t,:] = self.transfer_functions[-1](self.output_layer(temp_outputs[-1]))
+            self.recurrent_state = self.recurrent_activation(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
+            y[:,t,:] = self.output_activation(self.output_layer(temp_outputs[-1]))
 
         return y
-
 
 if __name__ == '__main__':
     x = 256             # number of hidden units in each layer
