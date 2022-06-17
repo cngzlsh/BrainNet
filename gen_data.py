@@ -124,6 +124,7 @@ if __name__ == '__main__':
     X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
     save_data(X_valid, Y_valid, './data/', f'abnn_cplx_valid_{x}_{y}_{z}_{firing_prob}.pkl')
 
+
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000
     # num_test_input = 1000

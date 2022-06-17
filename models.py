@@ -38,12 +38,13 @@ class RecurrentDNN(nn.Module):
         
         # input layer
         self.input_layer = nn.Linear(input_dim, hidden_dim)
+        self.transfer_function = transfer_function
 
-        # hidden LSTM layers
-        self.hidden_lstms = nn.ModuleList([])
-        for _ in range(self.n_layers):
-            self.hidden_lstms.append(nn.LSTM(hidden_dim, hidden_dim, batch_first=True))
-        
+        # hidden layers
+        self.hidden1 = nn.Linear(hidden_dim, hidden_dim)
+        self.hidden_lstms = nn.LSTM(hidden_dim, hidden_dim, num_layers=n_layers, bias=True, batch_first=True, bidirectional=False)
+        self.hidden2 = nn.Linear(hidden_dim, hidden_dim)
+
         # output layer
         self.output_layer = nn.Linear(hidden_dim, output_dim)
     
@@ -52,13 +53,15 @@ class RecurrentDNN(nn.Module):
         h_prev, c_prev = rec_prev
 
         x = self.input_layer(x)
+        x = self.transfer_function(x)
+
+        x = self.hidden1(x)
+        x = self.transfer_function(x)
+        
         h_curr, c_curr = torch.zeros_like(h_prev), torch.zeros_like(c_prev)
 
-        for i in range(self.n_layers):
-            x, (h_i, c_i) = self.hidden_lstms[i](x, (h_prev, c_prev))
-            h_curr[i] = h_i
-            c_curr[i] = c_i
-        
+        out, (h_curr, c_curr) = self.hidden_lstms(x, (h_prev, c_prev))
+
         out = self.output_layer(x)
 
         return out, (h_curr, c_curr)
