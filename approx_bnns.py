@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 import torch.distributions as dist
 import torch.nn.functional as F
+import random
 
 seed = 1234
 torch.manual_seed(seed)
+random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class FeedForwardApproximateBNN(nn.Module):
@@ -264,7 +266,7 @@ class ComplexApproximateBNN(nn.Module):
     :param residual_in:     list of len(z), denoting which layer (other than the prev layer) the input comes from. False if no skip connection as input
     :param recurrent_dim:   dimension of recurrent state. By default same as x
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=True, trainable=False):
+    def __init__(self, x, y, z, input_dim, output_dim, residual_in, recurrent_dim=-1, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh()], bias=True, trainable=False):
         super().__init__()
 
         assert len(residual_in) == z
@@ -272,7 +274,7 @@ class ComplexApproximateBNN(nn.Module):
         self.output_dim = output_dim
         self.residual_in = residual_in
         self.recurrent_dim = x if recurrent_dim == -1 else recurrent_dim
-        self.transfer_function = transfer_function
+        self.transfer_functions = random.choices(transfer_functions, k=z+3) # input, z hidden, output, recurrent
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
@@ -347,7 +349,7 @@ class ComplexApproximateBNN(nn.Module):
         for t in range(time_steps):
             
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
-            temp = self.transfer_function(temp) # (batch_size, hidden_dim)
+            temp = self.transfer_functions[0](temp) # (batch_size, hidden_dim)
 
             temp_outputs = [None] * (self.z + 1)
             temp_outputs[0] = temp
@@ -358,23 +360,23 @@ class ComplexApproximateBNN(nn.Module):
                 
                 if hidden_idx == 0: # first hidden layer receives recurrent connection
                     temp = torch.concat((temp_outputs[0], self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
-                    temp_outputs[hidden_idx+1] = self.transfer_function(self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
+                    temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
                 
                 else:
                     if self.residual_in[hidden_idx] is False:
                         # if there is no skip input, take input from prev layer
                         temp_input = temp_outputs[hidden_idx]
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                        temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+                        temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](temp_outputs[hidden_idx+1])
                     
                     else:
                         # if there is skip input, concat the input with the prev layer
                         temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                        temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+                        temp_outputs[hidden_idx+1] = self.transfer_functions[hidden_idx+1](temp_outputs[hidden_idx+1])
 
-            self.recurrent_state = self.transfer_function(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
-            y[:,t,:] = self.transfer_function(self.output_layer(temp_outputs[-1]))
+            self.recurrent_state = self.transfer_functions[-2](self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
+            y[:,t,:] = self.transfer_functions[-1](self.output_layer(temp_outputs[-1]))
 
         return y
 
