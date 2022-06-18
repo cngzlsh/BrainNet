@@ -172,7 +172,7 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
     
     _type = kwargs['_type']
     valid_loader = kwargs['valid_loader']
-    test_loader = kwargs['valid_loader']
+    test_loader = kwargs['test_loader']
     n_epochs = kwargs['n_epochs']
 
     final_eval_loss = np.zeros((len(hidden_dims), len(n_layerss)))
@@ -183,20 +183,34 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
             # deep learning model
             if _type == 'FF':
                 DNN = FeedForwardDNN(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
+
+                # training parameters
+                optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
+                criterion = nn.MSELoss()    
+
+                train_losses, eval_losses = train(
+                    model=DNN,
+                    train_loader=valid_loader, test_loader=test_loader,
+                    optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+                    verbose=False, force_stop=False)
+
+                print(f'{n_layers} layers, {hidden_dim} hidden units, final eval loss: {eval_losses[-1]}', end='\r')
+
             elif _type == 'RNN':
-                DNN = RecurrentDNN(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
+                n_linear_layers = n_layers
+                DNN = RecurrentDNN(input_dim=16, hidden_dim=hidden_dim, n_linear_layers=n_linear_layers, output_dim=16).to(device)
 
-            # training parameters
-            optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-            criterion = nn.MSELoss()    
+                optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
+                criterion = nn.MSELoss()
 
-            train_losses, eval_losses = train(
-                model=DNN,
-                train_loader=valid_loader, test_loader=test_loader,
-                optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
-                verbose=False, force_stop=False)
+                train_losses, eval_losses = train_rnn(
+                    model=DNN,
+                    train_loader=valid_loader, test_loader=test_loader,
+                    optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+                    verbose=False, force_stop=False)
 
-            print(f'{n_layers} layers, {hidden_dim} hidden units, final eval loss: {eval_losses[-1]}', end='\r')
+                print(f'{n_linear_layers} linear layers, 1 lstm layer, {hidden_dim} hidden units, final eval loss: {eval_losses[-1]}', end='\r')
+            
             final_eval_loss[i,j] = eval_losses[-1]
     
     return final_eval_loss

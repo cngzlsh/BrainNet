@@ -58,7 +58,7 @@ class RecurrentDNN(nn.Module):
 
         x = self.input_layer(x)
         x = self.transfer_function(x)
-
+        
         out, (h_curr, c_curr) = self.hidden_lstms(x, (h_prev, c_prev))
 
         if self.n_linear_layers > 0:
