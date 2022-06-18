@@ -97,8 +97,8 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
         model.train()
         epoch_loss = 0
         
-        h_prev = torch.zeros([model.n_layers, train_loader.batch_size, model.hidden_dim]).to(device)
-        c_prev = torch.zeros([model.n_layers, train_loader.batch_size, model.hidden_dim]).to(device)
+        h_prev = torch.zeros([model.n_lstm_layers, train_loader.batch_size, model.hidden_dim]).to(device)
+        c_prev = torch.zeros([model.n_lstm_layers, train_loader.batch_size, model.hidden_dim]).to(device)
         rec_prev = (h_prev, c_prev)
 
         for i, (X, Y) in enumerate(iter(train_loader)): # X: [batch_size, time_step, input_dim]
@@ -148,8 +148,8 @@ def eval_rnn(model, test_loader, criterion, save_Y_hat=False):
 
         eval_loss = 0
         
-        h_prev = torch.zeros([model.n_layers, test_loader.batch_size, model.hidden_dim]).to(device)
-        c_prev = torch.zeros([model.n_layers, test_loader.batch_size, model.hidden_dim]).to(device)
+        h_prev = torch.zeros([model.n_lstm_layers, test_loader.batch_size, model.hidden_dim]).to(device)
+        c_prev = torch.zeros([model.n_lstm_layers, test_loader.batch_size, model.hidden_dim]).to(device)
         rec_prev = (h_prev, c_prev)
 
         for _, (X, Y) in enumerate(iter(test_loader)):
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
 
     # deep learning model
-    DNN = RecurrentDNN(input_dim=16, hidden_dim=256, n_layers=1, output_dim=16).to(device)
+    DNN = RecurrentDNN(input_dim=16, hidden_dim=256, n_linear_layers=1, output_dim=16, n_lstm_layers=1).to(device)
 
     # training parameters
     optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)

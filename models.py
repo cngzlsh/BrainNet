@@ -30,10 +30,11 @@ class RecurrentDNN(nn.Module):
     '''
     Deep neural network with LSTM units
     '''
-    def __init__(self, input_dim, hidden_dim, n_layers, output_dim, transfer_function=nn.ReLU()):
+    def __init__(self, input_dim, hidden_dim, n_linear_layers, output_dim, n_lstm_layers=1, transfer_function=nn.ReLU()):
         super().__init__()
 
-        self.n_layers = n_layers
+        self.n_lstm_layers = n_lstm_layers
+        self.n_linear_layers = n_linear_layers
         self.hidden_dim = hidden_dim
         
         # input layer
@@ -41,9 +42,12 @@ class RecurrentDNN(nn.Module):
         self.transfer_function = transfer_function
 
         # hidden layers
-        self.hidden1 = nn.Linear(hidden_dim, hidden_dim)
-        self.hidden_lstms = nn.LSTM(hidden_dim, hidden_dim, num_layers=n_layers, bias=True, batch_first=True, bidirectional=False)
-        self.hidden2 = nn.Linear(hidden_dim, hidden_dim)
+        self.hidden_lstms = nn.LSTM(hidden_dim, hidden_dim, num_layers=n_lstm_layers, bias=True, batch_first=True, bidirectional=False)
+        if self.n_linear_layers > 0:
+            self.hidden_linears = nn.Sequential()
+            for i in range(n_linear_layers):
+                self.hidden_linears.add_module(f'hidden_linear_{i+1}', nn.Linear(hidden_dim, hidden_dim))
+                self.hidden_linears.add_module(f'relu_{i+1}', self.transfer_function)
 
         # output layer
         self.output_layer = nn.Linear(hidden_dim, output_dim)
@@ -55,13 +59,10 @@ class RecurrentDNN(nn.Module):
         x = self.input_layer(x)
         x = self.transfer_function(x)
 
-        x = self.hidden1(x)
-        x = self.transfer_function(x)
-        
-        h_curr, c_curr = torch.zeros_like(h_prev), torch.zeros_like(c_prev)
-
         out, (h_curr, c_curr) = self.hidden_lstms(x, (h_prev, c_prev))
 
+        if self.n_linear_layers > 0:
+            out = self.hidden_linears(x)
+    
         out = self.output_layer(x)
-
         return out, (h_curr, c_curr)
