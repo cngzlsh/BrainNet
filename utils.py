@@ -4,6 +4,7 @@ import os
 
 import torch
 from torch.utils.data import Dataset
+import torch.distributions as dist
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -151,7 +152,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False):
 
 
 def plot_bvc_firing_field(bvc, max_d=2500, n=200):
-    rads = np.linspace(-np.pi, np.pi, n)
+    rads = np.linspace(-0, 2*np.pi, n)
     ds = np.linspace(0, max_d, n)
 
     rads_mat, ds_mat = np.meshgrid(rads, ds)
@@ -159,6 +160,20 @@ def plot_bvc_firing_field(bvc, max_d=2500, n=200):
     plt.figure(figsize=(4,4))
     plt.axes(projection='polar')
 
-    firing_rates = bvc.obtain_firing_rate(ds_mat, rads_mat)
+    firing_rates = bvc.obtain_firing_rate_single_boundary(ds_mat, rads_mat)
     plt.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
     plt.show()
+
+
+def generate_locations(length, width, n):
+    '''
+    Generates multiple random location
+    '''
+    xs = dist.Uniform(0, length).sample(sample_shape=torch.Size([n]))
+    ys = dist.Uniform(0, width).sample(sample_shape=torch.Size([n]))
+
+    return xs, ys
+
+
+def compute_distance_and_angle_to_border(length, width, locations):
+    xs, ys = locations

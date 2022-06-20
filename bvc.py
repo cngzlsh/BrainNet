@@ -5,6 +5,53 @@ from utils import plot_bvc_firing_field
 
 torch.manual_seed(1234)
 
+
+class RectangleEnvironment:
+    '''
+    Rectangular environment to obtain BVC and PC firing rates
+    '''
+    def __init__(self, l, w):
+        self.l = torch.Tensor([l]) # maximum length
+        self.w = torch.Tensor([w]) # maximum width
+        
+    def compute_wall_dist(self, loc):
+        '''
+        Calculates the distances, bearings and subtended angles of a rat location
+        returns distances, bearings, angles. Each list of length 4
+        left/up - positive dist, right/down - negative dist
+        '''
+        x, y = loc
+        x = torch.Tensor([x]) if not isinstance(x, torch.Tensor) else x
+        y = torch.Tensor([y]) if not isinstance(y, torch.Tensor) else y
+        assert torch.any(x) > 0 and torch.any(x) < self.l
+        assert torch.any(y) > 0 and torch.any(y) < self.w
+        
+        distances, bearings, angles = [], [], []
+        
+        
+        # up wall
+        distances.append(y)
+        bearings.append(0 * torch.pi)
+        angles.append(torch.arctan(x/y) + torch.arctan((self.l-x)/y))
+
+        # right wall
+        distances.append(self.l - x)
+        bearings.append(1/2 * torch.pi)
+        angles.append(torch.arctan(y/(self.l-x)) + torch.arctan((self.w-y)/(self.l-x)))
+        
+        # down wall
+        distances.append(self.w - y)
+        bearings.append(1 * torch.pi)
+        angles.append(torch.arctan(x/(self.w-y)) + torch.arctan((self.l-x)/(self.w-y)))
+
+        # left wall
+        distances.append(x)
+        bearings.append(3/2* torch.pi)
+        angles.append(torch.arctan(y/x) + torch.arctan((self.w-y)/x))
+        
+        return distances, bearings, angles
+
+
 class BVC:
     '''
     A boundary vector cell with preferred distance and angle
@@ -21,9 +68,9 @@ class BVC:
         self.sigma_rad = torch.Tensor([((self.r/self.beta)+1) * self.sigma_zero])
         self.scaling_factor = scaling_factor
 
-    def obtain_firing_rate(self, d, phi):
+    def obtain_firing_rate_single_boundary(self, d, phi):
         '''
-        Computes the firing of BVC given a current distance and angle to a boundary.
+        Computes the firing of BVC given a current distance and angle to a single boundary.
         Firing rate is proportional to product of two gaussians centerred at the preferred distance and angle
         Vectorised: d and phi can be arrays or matricesd
         '''
@@ -32,8 +79,19 @@ class BVC:
                     torch.exp(-(self.theta - phi) ** 2 / (2 * self.sigma_ang ** 2))/ \
                         torch.sqrt(2 * torch.pi * self.sigma_ang ** 2)
         
-        return unscaled_firing_rate * self.scaling_factor
+        return unscaled_firing_rate
     
+    def obtain_net_firing_rate(self, distances, bearings, subtended_angles):
+        '''
+        A section of wall at distance r, bearing theta, subtending a angle dtheta at the rat contributes
+        dfi = gi(r, theta) * dtheta
+        The firing rate is found by integrating to find the net contribution of all the environment's boundaries
+        '''
+        n_boundaries = len(distances)
+        net_unscaled_firing_rates = torch.stack([self.obtain_firing_rate_single_boundary(distances[i], bearings[i]) for i in range(n_boundaries)], dim=0)
+        subtended_angles = torch.stack(subtended_angles, dim=0)
+        return torch.sum(torch.multiply(net_unscaled_firing_rates, subtended_angles), dim=0)
+        
 
 class BVCNetwork:
     '''
@@ -54,18 +112,15 @@ class BVCNetwork:
 
 
 if __name__ == '__main__':
-    n_cells = 20 # number of BVCs to simulate
+    l = 120
+    w = 80
+    env = RectangleEnvironment(l, w)
+    bvc1 = BVC(150, 0)
+    bvc2 = BVC(100, 1/2*torch.pi)
+    bvc3 = BVC(120, 1/3*torch.pi)
+    plot_bvc_firing_field(bvc2)
 
-    # BVC preferred distances ~ Uniform(0, 10)
-    preferred_distances = dist.uniform.Uniform(low=-0, high=2500).sample(torch.Size([n_cells]))
-    
-    # BVC preferred angles ~ Uniform(-pi, pi)
-    preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
-
-    # initialise BVCS and network
-    BVCs = [BVC(r=preferred_distances[i],theta=preferred_orientations[i]) for i in range(n_cells)]
-    network = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0)
-
-    # visualise the firing field of the first BVC and the whole place field
-    plot_bvc_firing_field(BVCs[3])
-    plot_bvc_firing_field(network)
+    n = 100
+    x, y = torch.meshgrid(torch.linspace(1e-5, l-1e-5, n), torch.linspace(1e-5, w-1e-5, n))
+    distances, bearings, angles = env.compute_wall_dist((x,y))
+    fr1 = bvc1.obtain_net_firing_rate(distances, bearings, angles)
