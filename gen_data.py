@@ -1,3 +1,4 @@
+from random import sample
 from approx_bnns import *
 from bvc import *
 from utils import *
@@ -20,7 +21,7 @@ def normalise_data(data):
 def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, time_steps=False, gaussian_noise=False):
     """
     Generates a toy dateset of firing pattern of approximate BNN
-    :param model:               MLP, approximate biological network
+    :param model:               approximate biological network
     :param input_dim:           input dimension
     :param output_dim:          output dimension
     :param num_inputs:          number of datapoints to generate
@@ -59,10 +60,25 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
 
 
 def generate_exponential_firing_rates(BNN, input_dim, n_data_points, mean_rates, time_steps=False, gaussian_noise=False):
+    '''
+    Generates a toy dataset of firing rates, each input follows an exponential distribution
+    :param model:               Mapproximate biological network
+    :param input_dim:           input dimension
+    :param output_dim:          output dimension
+    :param num_inputs:          number of datapoints to generate
+    :param mean rates:          1D array, mean firing rates of each dimension
+                                if a scalar is provided, assumed identical for each dimension
+    :param gaussian_noise:      (mean, std), whether to add noise to outputs. Default False
+    :return:
+    X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
+    Y:                          list of output firing patterns
+    '''
     if isinstance(mean_rates, float):
-        mean_rates = (torch.ones(input_dim)).to(device)
+        mean_rates = (torch.ones(input_dim)*mean_rates).to(device)
+    elif isinstance(mean_rates, np.ndarray):
+        mean_rates = torch.Tensor(mean_rates).to(device)
     else:
-        mean_rates.to(device)
+        mean_rates = mean_rates.to(device)
     
     if not time_steps:
         X = dist.Exponential(rate=mean_rates).sample(sample_shape=torch.Size([n_data_points]))
@@ -109,6 +125,8 @@ if __name__ == '__main__':
     num_test = 1000
     num_valid = 4000
     firing_prob = 0.5
+    poisson_rate = 6
+    mean_rates = dist.Poisson(rate=torch.ones(input_dim)*poisson_rate).sample()
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
     transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()]
@@ -122,14 +140,14 @@ if __name__ == '__main__':
         # transfer_functions=transfer_functions
         ).to(device)
 
-    X_train, Y_train = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_train, Y_train, './data/', f'abnn_cplx_train_{x}_{y}_{z}_{firing_prob}.pkl')
+    X_train, Y_train = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'abnn_cplx_train_{x}_{y}_{z}_{poisson_rate}.pkl')
 
-    X_test, Y_test = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_test, Y_test, './data/', f'abnn_cplx_test_{x}_{y}_{z}_{firing_prob}.pkl')
+    X_test, Y_test = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'abnn_cplx_test_{x}_{y}_{z}_{poisson_rate}.pkl')
 
-    X_valid, Y_valid = generate_binary_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, firing_prob=firing_prob, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_valid, Y_valid, './data/', f'abnn_cplx_valid_{x}_{y}_{z}_{firing_prob}.pkl')
+    X_valid, Y_valid = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'abnn_cplx_valid_{x}_{y}_{z}_{poisson_rate}.pkl')
 
 
     # n_cells = 8             # number of BVCs to simulate

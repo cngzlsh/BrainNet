@@ -168,6 +168,7 @@ class RecurrentApproximateBNN(nn.Module):
             self.recurrent_dim = recurrent_dim
 
         self.transfer_function = transfer_function
+        self.reccurent_activation = nn.Sigmoid()
         self.output_dim = output_dim
 
         # input layer
@@ -243,7 +244,7 @@ class RecurrentApproximateBNN(nn.Module):
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
             temp = self.transfer_function(temp) # (batch_size, hidden_dim)
 
-            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
+            # self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
 
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
             temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
@@ -252,7 +253,7 @@ class RecurrentApproximateBNN(nn.Module):
             y[:,t,:] = self.transfer_function(yt)
             
             ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
-            self.recurrent_state = self.transfer_function(ht)
+            self.recurrent_state = self.reccurent_activation(ht)
 
         return y
 
