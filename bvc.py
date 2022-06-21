@@ -5,7 +5,6 @@ from utils import plot_bvc_firing_field
 
 torch.manual_seed(1234)
 
-
 class RectangleEnvironment:
     '''
     Rectangular environment to obtain BVC and PC firing rates
@@ -27,7 +26,6 @@ class RectangleEnvironment:
         assert torch.any(y) > 0 and torch.any(y) < self.w
         
         distances, bearings, angles = [], [], []
-        
         
         # up wall
         distances.append(y)
@@ -62,8 +60,8 @@ class BVC:
     def __init__(self, r, theta, sigma_zero=122, beta=1830, sigma_ang=0.2, scaling_factor=1) -> None:
         self.r = torch.Tensor([r])
         self.theta = torch.Tensor([theta])
-        self.sigma_zero = sigma_zero        # Hartley 2000: sigZero = 122 mm
-        self.beta = beta                    # Hartley 2000: beta = 1830 mm
+        self.sigma_zero = sigma_zero                        # Hartley 2000: sigZero = 122 mm
+        self.beta = beta                                    # Hartley 2000: beta = 1830 mm
         self.sigma_ang = torch.Tensor([sigma_ang])          # Hartley 2000: angSig = 0.2 rad
         self.sigma_rad = torch.Tensor([((self.r/self.beta)+1) * self.sigma_zero])
         self.scaling_factor = scaling_factor
@@ -90,7 +88,7 @@ class BVC:
         n_boundaries = len(distances)
         net_unscaled_firing_rates = torch.stack([self.obtain_firing_rate_single_boundary(distances[i], bearings[i]) for i in range(n_boundaries)], dim=0)
         subtended_angles = torch.stack(subtended_angles, dim=0)
-        return torch.sum(torch.multiply(net_unscaled_firing_rates, subtended_angles), dim=0)
+        return self.scaling_factor * torch.sum(torch.multiply(net_unscaled_firing_rates, subtended_angles), dim=0)
         
 
 class BVCNetwork:
