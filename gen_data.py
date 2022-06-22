@@ -10,7 +10,6 @@ seed = 1234
 torch.manual_seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 def normalise_data(data):
     '''
     Normalises data: subtract mean and divide by std over batch_size dim (dim 0)
@@ -90,23 +89,42 @@ def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq,
     return X.cpu(), Y.cpu()
 
 def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
-    
-    n_trains = alpha.shape
-    flag = False
-    
-    while not flag:
-        ts = dist.Gamma(concentration=alpha, rate=beta).sample(sample_shape=torch.Size([500]))
-        cumu_time = torch.cumsum(ts, dim=0)
-        try:
-            bin_counts = torch.vstack([torch.bincount(cumu_time[:,i].long())[:time_steps] for i in range(n_trains)])
-            flag = True
-        except:
-            flag = False
+    '''
+    Generates multiple trains of spikes using Gamma interval process ISI ~ Gamma(alpha, beta)
 
+    :param alphas:      1D torch.Tensor, concentration of each gamma distribution
+    :param betas:       1D torch.Tensor, rates of each gamma distrbution. Same shape as alphas
+    :time_steps:        int, number of discretised time steps (bins)
+
+    :return:
+    bin_counts:         2D torch Tensor [time_steps, dim] number of spikes for each time bin
+    '''
+    n_trains = alpha.shape[0]
+
+    ts = dist.Gamma(concentration=alpha, rate=beta).sample(sample_shape=torch.Size([500]))
+    cumu_time = torch.cumsum(ts, dim=0)
+    bin_counts = torch.vstack([torch.bincount(cumu_time[:,i].long())[:time_steps] for i in range(n_trains)]).permute(1,0)
+        
     return bin_counts
 
 def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
-    X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas), time_steps=time_steps for _ in range( n_data_points)])
+    '''
+    Generates time series of patterns
+    '''
+    if isinstance(alphas, int) or isinstance(alphas, float):
+        alphas = torch.Tensor(torch.ones(input_dim) * alphas)
+        betas = torch.Tensor(torch.ones(input_dim) * betas)
+
+    X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas, time_steps=time_steps) for _ in range( n_data_points)]).to(device)
+    
+    Y = BNN(X)
+    Y = normalise_data(Y)
+
+    if gaussian_noise is not False:
+        mu, sigma = gaussian_noise
+        Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
+    
+    return X.cpu(), Y.cpu()
 
 
 def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
@@ -137,6 +155,9 @@ if __name__ == '__main__':
     num_valid = 4000
     mean_freq = 5
 
+    alphas = torch.ones(input_dim)*2
+    betas = dist.Poisson(rate=mean_freq*2).sample(sample_shape=torch.Size([input_dim]))
+
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
     transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()]
@@ -146,18 +167,19 @@ if __name__ == '__main__':
         input_dim=input_dim,
         output_dim=output_dim, 
         residual_in=residual_in,
-        # recurrent_dim=-1,
+        recurrent_dim=-1,
         transfer_functions=transfer_functions
         ).to(device)
 
-    X_train, Y_train = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_freq=mean_freq, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'resid_train_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_freq=mean_freq, gaussian_noise=False)
+    assert False
+    # save_data(X_train, Y_train, './data/', f'resid_train_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
-    X_test, Y_test = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_freq=mean_freq, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'resid_test_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    # X_test, Y_test = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_freq=mean_freq, gaussian_noise=False)
+    # save_data(X_test, Y_test, './data/', f'resid_test_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
-    X_valid, Y_valid = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_freq=mean_freq, gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'resid_valid_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    # X_valid, Y_valid = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_freq=mean_freq, gaussian_noise=False)
+    # save_data(X_valid, Y_valid, './data/', f'resid_valid_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000
