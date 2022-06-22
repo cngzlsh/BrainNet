@@ -1,4 +1,3 @@
-from random import sample
 from approx_bnns import *
 from bvc import *
 from utils import *
@@ -59,33 +58,27 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
     return X.cpu(), Y.cpu()
 
 
-def generate_exponential_firing_rates(BNN, input_dim, n_data_points, mean_rates, time_steps=False, gaussian_noise=False):
+def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False):
     '''
-    Generates a toy dataset of firing rates, each input follows an exponential distribution
+    A simple, approximately biological input pattern: {input_dim} input neurons into the approximate neuronal network,
+    the input is the number of spikes in a very small time bin. The number of spikes for each presynaptic neuron follows
+    independent Poisson distribution.
+
     :param model:               Mapproximate biological network
     :param input_dim:           input dimension
     :param output_dim:          output dimension
     :param num_inputs:          number of datapoints to generate
-    :param mean rates:          1D array, mean firing rates of each dimension
+    :param avg_Rates:           mean firing rate of a neuron
                                 if a scalar is provided, assumed identical for each dimension
     :param gaussian_noise:      (mean, std), whether to add noise to outputs. Default False
     :return:
     X:                          list of input neuron firing patterns (=1 if fires, =0 if not)
     Y:                          list of output firing patterns
     '''
-    if isinstance(mean_rates, float):
-        mean_rates = (torch.ones(input_dim)*mean_rates).to(device)
-    elif isinstance(mean_rates, np.ndarray):
-        mean_rates = torch.Tensor(mean_rates).to(device)
-    else:
-        mean_rates = mean_rates.to(device)
+    if isinstance(mean_freq, int) or isinstance(mean_freq, float):
+        mean_freq = torch.Tensor(torch.ones(input_dim) * mean_freq).to(device)
     
-    if not time_steps:
-        X = dist.Exponential(rate=mean_rates).sample(sample_shape=torch.Size([n_data_points]))
-    elif isinstance(time_steps, int):
-        X = dist.Exponential(rate=mean_rates).sample(sample_shape=torch.Size([n_data_points, time_steps]))
-    else:
-        raise ValueError('Temporal must be a time length of integer')
+    X = dist.Poisson(rate=mean_freq).sample(sample_shape=torch.Size([n_data_points]))
     
     Y = BNN(X)
     Y = normalise_data(Y)
@@ -95,6 +88,25 @@ def generate_exponential_firing_rates(BNN, input_dim, n_data_points, mean_rates,
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
     return X.cpu(), Y.cpu()
+
+def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
+    
+    n_trains = alpha.shape
+    flag = False
+    
+    while not flag:
+        ts = dist.Gamma(concentration=alpha, rate=beta).sample(sample_shape=torch.Size([500]))
+        cumu_time = torch.cumsum(ts, dim=0)
+        try:
+            bin_counts = torch.vstack([torch.bincount(cumu_time[:,i].long())[:time_steps] for i in range(n_trains)])
+            flag = True
+        except:
+            flag = False
+
+    return bin_counts
+
+def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
+    X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas), time_steps=time_steps for _ in range( n_data_points)])
 
 
 def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
@@ -111,12 +123,11 @@ def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distan
 
 
 if __name__ == '__main__':
-    x = 256             # number of hidden units in each layer
+    x = 256            # number of hidden units in each layer
     y = 0.5             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
-    transfer_function = nn.ReLU() 
     residual_in = [False, False, 1, 2]
 
     input_dim = 16
@@ -124,9 +135,8 @@ if __name__ == '__main__':
     num_train = 10000
     num_test = 1000
     num_valid = 4000
-    firing_prob = 0.5
-    poisson_rate = 6
-    mean_rates = dist.Poisson(rate=torch.ones(input_dim)*poisson_rate).sample()
+    mean_freq = 5
+
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
     transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()]
@@ -135,20 +145,19 @@ if __name__ == '__main__':
         x=x, y=y, z=z,
         input_dim=input_dim,
         output_dim=output_dim, 
-        # residual_in=residual_in,
-        recurrent_dim=-1,
-        # transfer_functions=transfer_functions
+        residual_in=residual_in,
+        # recurrent_dim=-1,
+        transfer_functions=transfer_functions
         ).to(device)
 
-    X_train, Y_train = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'abnn_cplx_train_{x}_{y}_{z}_{poisson_rate}.pkl')
+    X_train, Y_train = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_freq=mean_freq, gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'resid_train_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
-    X_test, Y_test = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'abnn_cplx_test_{x}_{y}_{z}_{poisson_rate}.pkl')
+    X_test, Y_test = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_freq=mean_freq, gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'resid_test_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
-    X_valid, Y_valid = generate_exponential_firing_rates(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_rates=mean_rates, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'abnn_cplx_valid_{x}_{y}_{z}_{poisson_rate}.pkl')
-
+    X_valid, Y_valid = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_freq=mean_freq, gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'resid_valid_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000

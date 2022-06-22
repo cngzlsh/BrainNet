@@ -10,6 +10,21 @@ torch.manual_seed(seed)
 random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+class RandomActivation(nn.Module):
+    '''
+    Custom non-linearity layer, applies a random non-linearity for each dimension
+    Mimics neuronal network where each neuron has slightly different activation
+    '''
+    def __init__(self, _dim, transfer_functions: list):
+        super().__init__()
+
+        self.transfer_functions = random.choices(transfer_functions, k=_dim)
+        self.dim = _dim
+
+    def forward(self, x):
+        # x: [batch_size, dim]
+        return torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
+
 class FeedForwardApproximateBNN(nn.Module):
     '''
     A feed-forward approximately biological network
@@ -18,7 +33,7 @@ class FeedForwardApproximateBNN(nn.Module):
     :param y:               probability of randomly disabling weight (connection between each two neurons)
     :param z:               number of hidden layers
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, transfer_function=nn.ReLU(), bias=True, trainable=False) -> None:
+    def __init__(self, x, y, z, input_dim, output_dim, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()], bias=True, trainable=False) -> None:
         super().__init__()
         
         self.layers = nn.Sequential()
@@ -26,23 +41,25 @@ class FeedForwardApproximateBNN(nn.Module):
 
         # input layer
         self.layers.add_module('input', nn.Linear(input_dim, x, bias=bias))
-        self.layers.add_module('relu_1', transfer_function)
+        self.layers.add_module('non_lin_1', RandomActivation(transfer_functions=transfer_functions, _dim=x))
         
         # hidden layers
         for hidden_idx in range(1, z+1):
             self.layers.add_module(f'hidden_{hidden_idx}', nn.Linear(x, x, bias=bias))
-            self.layers.add_module(f'relu_{hidden_idx+1}', transfer_function)
+            self.layers.add_module(f'non_lin_{hidden_idx+1}', RandomActivation(transfer_functions=transfer_functions, _dim=x))
 
         # output layer
         self.layers.add_module('output', nn.Linear(x, output_dim, bias=bias))
-        self.layers.add_module(f'ReLU_{z+1}', transfer_function)
+        self.layers.add_module(f'non_lin_{z+2}', RandomActivation(transfer_functions=transfer_functions, _dim=output_dim))
 
         # neurons are connected ~Bernoulli(y)
         def apply_connectivity(): # makes the network more biologically plausible
+            
             for layer in self.layers:
                 if isinstance(layer, nn.Linear):
                     nn.init.normal_(layer.weight, mean=0, std=1)
                     nn.init.normal_(layer.bias, mean=0, std=1)
+                    
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
 
@@ -65,30 +82,34 @@ class ResidualApproximateBNN(nn.Module):
     :param z:               number of hidden layers
     :param residual_in:     list of len(z), denoting which layer (other than the prev layer) the input comes from. False if no skip connection as input
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, residual_in, transfer_function=nn.ReLU(), bias=True, trainable=False):
+    def __init__(self, x, y, z, input_dim, output_dim, residual_in, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()], bias=True, trainable=False):
         super().__init__()
 
         assert len(residual_in) == z
 
         self.z = z
         self.residual_in = residual_in
-        self.transfer_function = transfer_function
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
+        self.input_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
 
         # store hidden layers in a list
         self.hidden_layers = nn.ModuleList([])
+        self.hidden_activations = []
         for hidden_idx in range(self.z):
             if self.residual_in[hidden_idx] == False:
                 # if no residual connection, input_dim = x
                 self.hidden_layers.append(nn.Linear(x, x, bias=bias))
+                self.hidden_activations.append(RandomActivation(transfer_functions=transfer_functions, _dim=x))
             else:
                 # if residual connection, input_dim = 2*x
                 self.hidden_layers.append(nn.Linear(2*x, x, bias=bias))
+                self.hidden_activations.append(RandomActivation(transfer_functions=transfer_functions, _dim=x))
         
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
+        self.output_activation = RandomActivation(transfer_functions=transfer_functions, _dim=output_dim)
         
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
@@ -125,7 +146,7 @@ class ResidualApproximateBNN(nn.Module):
 
     def forward(self, x):
         x = self.input_layer(x)
-        x = self.transfer_function(x)
+        x = self.input_activation(x)
 
         temp_outputs = [None] * (self.z + 1)
         temp_outputs[0] = x
@@ -136,16 +157,16 @@ class ResidualApproximateBNN(nn.Module):
                 # if there is no skip input, take input from prev layer
                 temp_input = temp_outputs[hidden_idx]
                 temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+                temp_outputs[hidden_idx+1] = self.hidden_activations[hidden_idx](temp_outputs[hidden_idx+1])
 
             else:
                 # if there is skip input, concat the input with the prev layer
                 temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
                 temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
-                temp_outputs[hidden_idx+1] = self.transfer_function(temp_outputs[hidden_idx+1])
+                temp_outputs[hidden_idx+1] = self.hidden_activations[hidden_idx](temp_outputs[hidden_idx+1])
         
         out = self.output_layer(temp_outputs[-1])
-        out = self.transfer_function(out)
+        out = self.output_activation(out)
         
         return out
 
@@ -159,7 +180,7 @@ class RecurrentApproximateBNN(nn.Module):
     :param z:               number of hidden layers
     :param recurrent_dim:   dimension of recurrent state. By default same as x
     '''
-    def __init__(self, x, y, z, input_dim, output_dim, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=True, trainable=False):
+    def __init__(self, x, y, z, input_dim, output_dim, recurrent_dim=-1, transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()], bias=True, trainable=False):
         super().__init__()
         
         if recurrent_dim == -1: # if recurrent state dimension unspecified, default to same as hidden dim
@@ -167,26 +188,27 @@ class RecurrentApproximateBNN(nn.Module):
         else:
             self.recurrent_dim = recurrent_dim
 
-        self.transfer_function = transfer_function
-        self.reccurent_activation = nn.Sigmoid()
         self.output_dim = output_dim
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
+        self.input_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
 
         # hidden layers, where the first hidden layer also takes in recurrent state
         self.hidden_layers = nn.Sequential()
         self.hidden_layers.add_module('hidden_1', nn.Linear(x + self.recurrent_dim, x, bias=bias))
-        self.hidden_layers.add_module('relu_1', self.transfer_function)
+        self.hidden_layers.add_module('non_lin_1', RandomActivation(transfer_functions=transfer_functions, _dim=x))
         for hidden_idx in range(2, z+1):
             self.hidden_layers.add_module(f'hidden_{hidden_idx}', nn.Linear(x, x, bias=bias))
-            self.hidden_layers.add_module(f'relu_{hidden_idx+1}', self.transfer_function)
+            self.hidden_layers.add_module(f'non_lin_{hidden_idx+1}', RandomActivation(transfer_functions=transfer_functions, _dim=x))
         
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
+        self.output_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
 
         # projection to hidden state
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
+        self.recurrent_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
 
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
@@ -242,36 +264,21 @@ class RecurrentApproximateBNN(nn.Module):
         for t in range(time_steps):
             
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
-            temp = self.transfer_function(temp) # (batch_size, hidden_dim)
+            temp = self.input_activation(temp) # (batch_size, hidden_dim)
 
-            # self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
+            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
 
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
             temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
 
             yt = self.output_layer(temp)         # (batch_size, output_dim)
-            y[:,t,:] = self.transfer_function(yt)
+            y[:,t,:] = self.output_activation(yt)
             
             ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
             self.recurrent_state = self.reccurent_activation(ht)
 
         return y
 
-
-class RandomActivation(nn.Module):
-    '''
-    Custom non-linearity layer, applies a random non-linearity for each dimension
-    Mimics neuronal network where each neuron has slightly different activation
-    '''
-    def __init__(self, _dim, transfer_functions: list):
-        super().__init__()
-
-        self.transfer_functions = random.choices(transfer_functions, k=_dim)
-        self.dim = _dim
-
-    def forward(self, x):
-        # x: [batch_size, dim]
-        return torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
 
 
 class ComplexApproximateBNN(nn.Module):

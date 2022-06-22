@@ -15,6 +15,8 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     '''
     Main training function. Iterates through training set in mini batches, updates gradients and compute loss.
     '''
+
+    print('Training on: ', torch.cuda.get_device_name())
     start = time.time()
 
     eval_losses, train_losses = [], []
@@ -85,6 +87,7 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
     '''
     Main training function. Iterates through training set in mini batches, updates gradients and compute loss.
     '''
+    print('Training on: ', torch.cuda.get_device_name())
     start = time.time()
 
     eval_losses, train_losses = [], []
