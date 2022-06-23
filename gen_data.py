@@ -101,11 +101,11 @@ def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
     '''
     n_trains = alpha.shape[0]
 
-    ts = dist.Gamma(concentration=alpha, rate=beta).sample(sample_shape=torch.Size([500]))
+    ts = dist.Gamma(concentration=alpha, rate=beta).sample(sample_shape=torch.Size([1000]))
     cumu_time = torch.cumsum(ts, dim=0)
     bin_counts = torch.vstack([torch.bincount(cumu_time[:,i].long())[:time_steps] for i in range(n_trains)]).permute(1,0)
         
-    return bin_counts
+    return bin_counts.float()
 
 def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
     '''
@@ -155,14 +155,14 @@ if __name__ == '__main__':
     num_valid = 4000
     mean_freq = 5
 
-    alphas = torch.ones(input_dim)*2
+    alphas = torch.ones(input_dim) * 2
     betas = dist.Poisson(rate=mean_freq*2).sample(sample_shape=torch.Size([input_dim]))
 
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
     transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()]
 
-    approx_bnn = RecurrentApproximateBNN(
+    approx_bnn = ComplexApproximateBNN(
         x=x, y=y, z=z,
         input_dim=input_dim,
         output_dim=output_dim, 
@@ -171,15 +171,14 @@ if __name__ == '__main__':
         transfer_functions=transfer_functions
         ).to(device)
 
-    X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, mean_freq=mean_freq, gaussian_noise=False)
-    assert False
-    # save_data(X_train, Y_train, './data/', f'resid_train_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'cplx_train_abnn_{x}_{y}_{z}_2.pkl')
 
-    # X_test, Y_test = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, mean_freq=mean_freq, gaussian_noise=False)
-    # save_data(X_test, Y_test, './data/', f'resid_test_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    X_test, Y_test = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'cplx_test_abnn_{x}_{y}_{z}_2.pkl')
 
-    # X_valid, Y_valid = generate_stochastic_firing_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, mean_freq=mean_freq, gaussian_noise=False)
-    # save_data(X_valid, Y_valid, './data/', f'resid_valid_abnn_{x}_{y}_{z}_{mean_freq}.pkl')
+    X_valid, Y_valid = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'cplx_valid_abnn_{x}_{y}_{z}_2.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000

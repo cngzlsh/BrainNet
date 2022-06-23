@@ -204,7 +204,7 @@ class RecurrentApproximateBNN(nn.Module):
         
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
-        self.output_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
+        self.output_activation = RandomActivation(transfer_functions=transfer_functions, _dim=output_dim)
 
         # projection to hidden state
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
@@ -275,7 +275,7 @@ class RecurrentApproximateBNN(nn.Module):
             y[:,t,:] = self.output_activation(yt)
             
             ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
-            self.recurrent_state = self.reccurent_activation(ht)
+            self.recurrent_state = self.recurrent_activation(ht)
 
         return y
 
@@ -322,9 +322,9 @@ class ComplexApproximateBNN(nn.Module):
         # recurrent connection
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
-        def apply_connectivity(mixture=(0.75, 0.25), component_mean=(-3,3), component_std=(1,1)):
+        def apply_connectivity(mixture=(0.75, 0.25), component_mean=(-1,1), component_std=(1,1)):
             '''
-            Weight initialisation is a mixture of Gaussian, 75% excitatory ~ N(3,3) and 25% inhibitory ~ N(-1,1)
+            Weight initialisation is a mixture of Gaussian, 75% excitatory ~ N(1,1) and 25% inhibitory ~ N(-1,1)
             with random dropout probability 1-y
             Bias is initialised as N(0,1)
             '''

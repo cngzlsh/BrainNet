@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-from utils import plot_bvc_firing_field
+import matplotlib.pyplot as plt
+from utils import *
 
 torch.manual_seed(1234)
 
@@ -12,6 +13,7 @@ class RectangleEnvironment:
     def __init__(self, l, w):
         self.l = torch.Tensor([l]) # maximum length
         self.w = torch.Tensor([w]) # maximum width
+        self.aspect_ratio = l / w
         
     def compute_wall_dist(self, loc):
         '''
@@ -48,6 +50,17 @@ class RectangleEnvironment:
         angles.append(torch.arctan(y/x) + torch.arctan((self.w-y)/x))
         
         return distances, bearings, angles
+
+    def visualise_bvc_firing_rate(self, bvc, n=100):
+        x, y = torch.meshgrid(
+            torch.linspace(1e-3, self.l-1e-3, n),
+            torch.linspace(torch.Tensor([1e-3]), self.w-1e-3, n))
+        distances, bearings, angles = self.compute_wall_dist((x,y))
+        firing_rates = bvc.obtain_net_firing_rate(distances, bearings, angles)
+        
+        plt.figure(figsize=(6, 6/self.aspect_ratio))
+        plt.scatter(x, y[::-1], c= firing_rates)
+        plt.show()
 
 
 class BVC:
