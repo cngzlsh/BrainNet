@@ -53,13 +53,13 @@ class RectangleEnvironment:
 
     def visualise_bvc_firing_rate(self, bvc, n=100):
         x, y = torch.meshgrid(
-            torch.linspace(1e-3, self.l-1e-3, n),
-            torch.linspace(torch.Tensor([1e-3]), self.w-1e-3, n))
+            torch.linspace(1e-3, self.l.item()-1e-3, n),
+            torch.linspace(1e-3, self.w.item()-1e-3, n))
         distances, bearings, angles = self.compute_wall_dist((x,y))
         firing_rates = bvc.obtain_net_firing_rate(distances, bearings, angles)
         
         plt.figure(figsize=(6, 6/self.aspect_ratio))
-        plt.scatter(x, y[::-1], c= firing_rates)
+        plt.scatter(x, self.w-y, c= firing_rates)
         plt.show()
 
 
@@ -100,9 +100,10 @@ class BVC:
         '''
         n_boundaries = len(distances)
         net_unscaled_firing_rates = torch.stack([self.obtain_firing_rate_single_boundary(distances[i], bearings[i]) for i in range(n_boundaries)], dim=0)
+        # print(net_unscaled_firing_rates)
         subtended_angles = torch.stack(subtended_angles, dim=0)
         return self.scaling_factor * torch.sum(torch.multiply(net_unscaled_firing_rates, subtended_angles), dim=0)
-        
+
 
 class BVCNetwork:
     '''
@@ -117,7 +118,7 @@ class BVCNetwork:
         self.non_linearity = non_linearity
     
     def obtain_firing_rate(self, d, phi):
-        firing_rates = torch.stack([bvc.obtain_firing_rate(d=d, phi=phi) for bvc in self.BVCs], dim=0)
+        firing_rates = torch.stack([bvc.obtain_net_firing_rate(d=d, phi=phi) for bvc in self.BVCs], dim=0)
         thresholded_rate = torch.sum(firing_rates, dim=0) - self.threshold
         return self.coeff * self.non_linearity(thresholded_rate)
 
@@ -125,7 +126,9 @@ class BVCNetwork:
 if __name__ == '__main__':
     l = 120
     w = 80
+
     env = RectangleEnvironment(l, w)
+
     bvc1 = BVC(150, 0)
     bvc2 = BVC(100, 1/2*torch.pi)
     bvc3 = BVC(120, 1/3*torch.pi)
