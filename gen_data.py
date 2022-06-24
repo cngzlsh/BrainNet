@@ -171,6 +171,11 @@ if __name__ == '__main__':
         transfer_functions=transfer_functions
         ).to(device)
 
+    torch.save(approx_bnn.state_dict(), f'./approx_bnn_params/cplx_abnn_{x}_{y}_{z}.pt')
+
+    # approx_bnn.gaussian_weight_update(sigma=0.1)
+
+
     X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
     save_data(X_train, Y_train, './data/', f'cplx_train_abnn_{x}_{y}_{z}_2.pkl')
 

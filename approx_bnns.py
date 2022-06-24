@@ -283,7 +283,11 @@ class RecurrentApproximateBNN(nn.Module):
 
 class ComplexApproximateBNN(nn.Module):
     '''
-    An approximately biological network with residual and recurrent connections: hidden L4 -> hidden L1
+    An (arbitrarily complex) approximately biological network with
+        residual (skip) connection:     hidden L1 -> hidden L3
+                                        hidden L2 -> hidden L4
+        lateral inhibition:             hidden L2 -> hidden L2
+        backprojection:                 hidden L4 -> hidden L1
 
     :param x:               hidden units in each layer
     :param y:               probability of randomly disabling weight (connection between each two neurons)
@@ -295,11 +299,13 @@ class ComplexApproximateBNN(nn.Module):
         super().__init__()
 
         assert len(residual_in) == z
+        self.x = x
         self.z = z
         self.output_dim = output_dim
         self.residual_in = residual_in
         self.recurrent_dim = x if recurrent_dim == -1 else recurrent_dim
         self.activations = [RandomActivation(_dim=x, transfer_functions=transfer_functions) for _ in range(z+1)] # input layer and z hidden layers
+        self.lateral_inhibition_activation = RandomActivation(_dim=x, transfer_functions=transfer_functions)
         self.recurrent_activation = RandomActivation(_dim = self.recurrent_dim, transfer_functions=transfer_functions)
         self.output_activation = RandomActivation(_dim=output_dim, transfer_functions=transfer_functions)
 
@@ -309,20 +315,22 @@ class ComplexApproximateBNN(nn.Module):
         # store hidden layers in a list
         self.hidden_layers = nn.ModuleList([])
         for hidden_idx in range(self.z):
-            if self.residual_in[hidden_idx] == False and hidden_idx != 0: # first layer also takes in recurrent connection
-                # if no residual connection, input_dim = x
-                self.hidden_layers.append(nn.Linear(x, x, bias=bias))
-            else:
-                # if residual connection, input_dim = 2*x
+                # hidden 1: recurrent from hidden 4
+                # hidden 2: recurrent from layer 2
+                # hidden 3: skip from layer 1
+                # hidden 4: skip from layer 2
                 self.hidden_layers.append(nn.Linear(2*x, x, bias=bias))
         
+        # lateral inhibition layer
+        self.lateral_inhibition_layer = nn.Linear(x, x, bias=bias)
+
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
 
-        # recurrent connection
+        # backprojection
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
-        def apply_connectivity(mixture=(0.75, 0.25), component_mean=(-1,1), component_std=(1,1)):
+        def apply_connectivity(mixture=(0.8, 0.2), component_mean=(-1,1), component_std=(1,1)):
             '''
             Weight initialisation is a mixture of Gaussian, 75% excitatory ~ N(1,1) and 25% inhibitory ~ N(-1,1)
             with random dropout probability 1-y
@@ -350,13 +358,19 @@ class ComplexApproximateBNN(nn.Module):
                         layer.weight.requires_grad = False
                         layer.bias.requires_grad = False
             
+            # lateral inhibition layer
+            nn.init.normal_(self.lateral_inhibition_layer.weight, mean=-1, std=1)
+            nn.init.normal_(self.lateral_inhibition_layer.bias, mean=0, std=1)
+            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.lateral_inhibition_layer.weight.shape)
+            self.lateral_inhibition_layer.weight = nn.Parameter(torch.mul(self.lateral_inhibition_layer.weight, mask))
+
             # output layer
             self.output_layer.weight.data = MoG.sample(self.output_layer.weight.data.shape)
             nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
-            # recurrent connection
+            # backprojection
             self.recurrent_connection.weight.data = MoG.sample(self.recurrent_connection.weight.data.shape)
             nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
@@ -367,10 +381,43 @@ class ComplexApproximateBNN(nn.Module):
                 self.input_layer.bias.requires_grad = False
                 self.output_layer.weight.requires_grad = False
                 self.output_layer.bias.requires_grad = False
+                self.lateral_inhibition_layer.weight.requires_grad = False
+                self.lateral_inhibition_layer.bias.requires_grad = False
                 self.recurrent_connection.weight.requires_grad = False
                 self.recurrent_connection.bias.requires_grad = False
         
         apply_connectivity()
+    
+    def gaussian_weight_update(self, sigma):
+        '''
+        Mimics neuronal plasticity dynamics, slightly alter each non-zero weight by injecting a small Gaussian noise
+        '''
+        # input layer
+        non_zero_mask = 1 * (self.input_layer.weight.data != 0)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.input_layer.weight.data.shape)
+        self.input_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
+
+        # hidden layers
+        for layer in self.hidden_layers:
+            if isinstance(layer, nn.Linear):
+                non_zero_mask = 1 * (layer.weight.data != 0)
+                gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=layer.weight.data.shape)
+                layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
+        
+        # output layer
+        non_zero_mask = 1 * (self.output_layer.weight.data != 0)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.output_layer.weight.data.shape)
+        self.output_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
+
+        # lateral inhibition layer
+        non_zero_mask = 1 * (self.lateral_inhibition_layer.weight.data != 0)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape)
+        self.lateral_inhibition_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
+
+        # backprojection
+        non_zero_mask = 1 * (self.recurrent_connection.weight.data != 0)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape)
+        self.recurrent_connection.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
     
     def forward(self, x):
         '''
@@ -378,8 +425,10 @@ class ComplexApproximateBNN(nn.Module):
         '''
         batch_size, time_steps, _ = x.shape
 
-        # initialise recurrent state and output tensor
-        self.recurrent_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
+        # initialise recurrent states and output tensor
+        self.backprojection_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
+        self.lateral_inhibition_state = torch.zeros(batch_size, self.x).to(device)
+        
         y = torch.zeros([batch_size, time_steps, self.output_dim]).to(device)
 
         for t in range(time_steps):
@@ -390,31 +439,37 @@ class ComplexApproximateBNN(nn.Module):
             temp_outputs = [None] * (self.z + 1)
             temp_outputs[0] = temp
 
-            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
+            self.backprojection_state = F.normalize(self.backprojection_state) # normalise recurrent state to ensure no nan
+            self.lateral_inhibition_state = F.normalize(self.lateral_inhibition_state)
 
             for hidden_idx in range(self.z):
                 
                 if hidden_idx == 0: # first hidden layer receives recurrent connection
-                    temp = torch.concat((temp_outputs[0], self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
+                    temp = torch.concat((temp_outputs[0], self.backprojection_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
                     temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](self.hidden_layers[0](temp))     # (batch_size, hidden_dim)
                 
-                else:
-                    if self.residual_in[hidden_idx] is False:
-                        # if there is no skip input, take input from prev layer
-                        temp_input = temp_outputs[hidden_idx]
+                if hidden_idx == 1: # second hidden layer receives lateral inhibition
+                    temp = torch.concat((temp_outputs[1], self.lateral_inhibition_state), dim=-1)
+                    temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](self.hidden_layers[1](temp))
+                    self.lateral_inhibition_state = self.lateral_inhibition_activation(self.lateral_inhibition_layer(temp_outputs[hidden_idx+1]))
+
+                if hidden_idx not in [0,1]:
+                    if self.residual_in[hidden_idx]:
+                    # if there is skip input, concat the input with the prev layer
+                        temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
                         temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
                     
                     else:
-                        # if there is skip input, concat the input with the prev layer
-                        temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
+                     # if there is no skip input, take input from prev layer
+                        temp_input = temp_outputs[hidden_idx]
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
                         temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
-
-            self.recurrent_state = self.recurrent_activation(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
+            self.backprojection_state = self.recurrent_activation(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
             y[:,t,:] = self.output_activation(self.output_layer(temp_outputs[-1]))
 
         return y
+
 
 if __name__ == '__main__':
     x = 256             # number of hidden units in each layer
