@@ -15,7 +15,7 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     '''
     Main training function. Iterates through training set in mini batches, updates gradients and compute loss.
     '''
-
+    
     start = time.time()
 
     eval_losses, train_losses = [], []

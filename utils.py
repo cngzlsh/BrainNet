@@ -41,6 +41,22 @@ def load_data(path, filename):
     return X, Y
 
 
+def save_non_linearities(_dict, path, filename):
+    '''
+    Saves the non-linearities of a biological neural network
+    '''
+    with open(path + filename, 'wb') as f:
+        pickle.dump(_dict, f)
+
+    f.close()
+
+
+def load_non_linearities(path, filename):
+    with open(path + filename, 'rb') as f:
+        _dict = pickle.load(f)
+    f.close()
+    return _dict
+
 def elapsed_time(start, end):
     '''
     Helper function to compute elapsed time

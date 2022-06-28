@@ -107,6 +107,7 @@ def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
         
     return bin_counts.float()
 
+
 def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
     '''
     Generates time series of patterns
@@ -125,6 +126,25 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
     
     return X.cpu(), Y.cpu()
+
+
+def apply_plasticity_and_generate_new_output(BNN, BNN_weights, X_train, X_test, sigma, verbose=True):
+    '''
+    Slightly alter each non-zero weight in the biological neural network, and generate new output patterns
+    '''
+    
+    BNN.load_state_dict(torch.load(BNN_weights))
+    BNN.gaussian_plasticity_update(sigma)
+    
+    if verbose:
+        print('\t Plasticity applied.')
+    
+    Y_train = normalise_data(BNN(X_train))
+    Y_test = normalise_data(BNN(X_test))
+
+    if verbose:
+        print('\t New output patterns generated')
+    return Y_train, Y_test
 
 
 def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
@@ -172,18 +192,18 @@ if __name__ == '__main__':
         ).to(device)
 
     torch.save(approx_bnn.state_dict(), f'./approx_bnn_params/cplx_abnn_{x}_{y}_{z}.pt')
-
+    save_non_linearities(approx_bnn.save_non_linearities(), './approx_bnn_params/', f'cplx_abnn_{x}_{y}_{z}_random_activation.pkl')
     # approx_bnn.gaussian_weight_update(sigma=0.1)
 
 
-    X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'cplx_train_abnn_{x}_{y}_{z}_2.pkl')
+    # X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
+    # save_data(X_train, Y_train, './data/', f'cplx_train_abnn_{x}_{y}_{z}_2.pkl')
 
     X_test, Y_test = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'cplx_test_abnn_{x}_{y}_{z}_2.pkl')
+    # save_data(X_test, Y_test, './data/', f'cplx_test_abnn_{x}_{y}_{z}_2.pkl')
 
     X_valid, Y_valid = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'cplx_valid_abnn_{x}_{y}_{z}_2.pkl')
+    # save_data(X_valid, Y_valid, './data/', f'cplx_valid_abnn_{x}_{y}_{z}_2.pkl')
 
     # n_cells = 8             # number of BVCs to simulate
     # num_train_input = 10000

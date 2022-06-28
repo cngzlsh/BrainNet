@@ -20,6 +20,9 @@ class RandomActivation(nn.Module):
 
         self.transfer_functions = random.choices(transfer_functions, k=_dim)
         self.dim = _dim
+    
+    def load_params(self, saved_transfer_functions):
+        self.transfer_functions = saved_transfer_functions
 
     def forward(self, x):
         # x: [batch_size, dim]
@@ -388,35 +391,53 @@ class ComplexApproximateBNN(nn.Module):
         
         apply_connectivity()
     
-    def gaussian_weight_update(self, sigma):
+    def save_non_linearities(self):
         '''
-        Mimics neuronal plasticity dynamics, slightly alter each non-zero weight by injecting a small Gaussian noise
+        Saves RandomActivation to a dictionary
+        '''
+        _dict = {}
+        for name, module in self.named_modules():
+            if isinstance(module, RandomActivation):
+                _dict[name] = module.transfer_functions
+        return _dict
+
+    def load_non_linearities(self, _dict):
+        '''
+        Loads RandomActivation from a dictionary
+        '''
+        for name, module in self.named_modules():
+            if isinstance(module, RandomActivation):
+                module.load_params(_dict[name])
+
+    def gaussian_plasticity_update(self, sigma):
+        '''
+        Mimics neuronal plasticity dynamics, slightly alter each non-zero weight by injecting a small Gaussian noise to all layers
         '''
         # input layer
         non_zero_mask = 1 * (self.input_layer.weight.data != 0)
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.input_layer.weight.data.shape)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.input_layer.weight.data.shape).to(device)
         self.input_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # hidden layers
         for layer in self.hidden_layers:
             if isinstance(layer, nn.Linear):
                 non_zero_mask = 1 * (layer.weight.data != 0)
-                gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=layer.weight.data.shape)
+                gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=layer.weight.data.shape).to(device)
                 layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
         
         # output layer
         non_zero_mask = 1 * (self.output_layer.weight.data != 0)
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.output_layer.weight.data.shape)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.output_layer.weight.data.shape).to(device)
         self.output_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # lateral inhibition layer
         non_zero_mask = 1 * (self.lateral_inhibition_layer.weight.data != 0)
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device)
         self.lateral_inhibition_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # backprojection
         non_zero_mask = 1 * (self.recurrent_connection.weight.data != 0)
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape)
+        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device)
         self.recurrent_connection.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
     
     def forward(self, x):
