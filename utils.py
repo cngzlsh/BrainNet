@@ -167,7 +167,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False, figsize=(12
     plt.show()
 
 
-def plot_bvc_firing_field(bvcs, max_d=500, n=200):
+def plot_bvc_firing_field(bvcs, max_d='auto', n=200):
     '''
     Plots firing field of (multiple) BVCs
     '''
@@ -175,10 +175,12 @@ def plot_bvc_firing_field(bvcs, max_d=500, n=200):
         bvcs = [bvcs]
     n_bvcs = len(bvcs)
     
-    rads = np.linspace(-np.pi, np.pi, n)
-    ds = np.linspace(0, max_d, n)
+    if max_d =='auto':
+        max_d = int(max([i.d for i in bvcs]) * 1.5)
+    rads = torch.linspace(-torch.pi, torch.pi, n)
+    ds = torch.linspace(0, max_d, n)
 
-    rads_mat, ds_mat = np.meshgrid(rads, ds)
+    rads_mat, ds_mat = torch.meshgrid(rads, ds)
 
     plt.figure(figsize=(4*n_bvcs, 4))
     for i in range(n_bvcs):

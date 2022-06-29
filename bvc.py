@@ -51,17 +51,29 @@ class RectangleEnvironment:
         
         return distances, bearings, angles
 
-    def visualise_bvc_firing_rate(self, bvc, n=100):
+    def visualise_bvc_firing_rates(self, bvcs, n=100, verbose=True):
+        '''
+        Visualises firing rate of BVC(s)
+        '''
+        if not isinstance(bvcs, list):
+            bvcs = [bvcs]
+        n_bvcs = len(bvcs)
+        
         x, y = torch.meshgrid(
             torch.linspace(1e-3, self.l.item()-1e-3, n),
             torch.linspace(1e-3, self.w.item()-1e-3, n))
         distances, bearings, angles = self.compute_wall_dist((x,y))
-        firing_rates = bvc.obtain_net_firing_rate(distances, bearings, angles)
         
-        plt.figure(figsize=(6, 6/self.aspect_ratio))
-        plt.scatter(x, self.w-y, c= firing_rates)
+        plt.figure(figsize=(6*n_bvcs, 6/self.aspect_ratio))
+                   
+        firing_rates = [cell.obtain_net_firing_rate(distances, bearings, angles) for cell in bvcs]
+        
+        for i, bvc in enumerate(bvcs):
+            plt.subplot(1, n_bvcs, i+1)
+            plt.scatter(x, self.w-y, c= firing_rates[i])
+            plt.title(f'd = {int(bvc.d)}, deg = {int(bvc.phi/torch.pi*180)}')
         plt.show()
-
+        
 
 class BVC:
     '''
@@ -70,24 +82,25 @@ class BVC:
     beta controls the rate at which sigma_rad increases
     Defaults - all distances in mm
     '''
-    def __init__(self, r, theta, sigma_zero=122, beta=1830, sigma_ang=0.2, scaling_factor=1) -> None:
-        self.r = torch.Tensor([r])
-        self.theta = torch.Tensor([theta])
+    def __init__(self, d, phi, sigma_zero=122, beta=1830, sigma_ang=0.2, multiplier=10000, maxfire=5) -> None:
+        self.d = torch.Tensor([d])
+        self.phi = torch.Tensor([phi])
         self.sigma_zero = sigma_zero                        # Hartley 2000: sigZero = 122 mm
         self.beta = beta                                    # Hartley 2000: beta = 1830 mm
         self.sigma_ang = torch.Tensor([sigma_ang])          # Hartley 2000: angSig = 0.2 rad
-        self.sigma_rad = torch.Tensor([((self.r/self.beta)+1) * self.sigma_zero])
-        self.scaling_factor = scaling_factor
+        self.sigma_rad = torch.Tensor([((self.d/self.beta)+1) * self.sigma_zero])
+        self.multiplier = multiplier
+        self.maxfire = maxfire
 
-    def obtain_firing_rate_single_boundary(self, d, phi):
+    def obtain_firing_rate_single_boundary(self, r, theta):
         '''
         Computes the firing of BVC given a current distance and angle to a single boundary.
         Firing rate is proportional to product of two gaussians centerred at the preferred distance and angle
-        Vectorised: d and phi can be arrays or matricesd
+        Vectorised: r and theta can be arrays or matrices
         '''
-        unscaled_firing_rate = torch.exp(-(self.r - d) ** 2 / (2 * self.sigma_rad ** 2))/ \
+        unscaled_firing_rate = torch.exp(-(r - self.d) ** 2 / (2 * self.sigma_rad ** 2))/ \
                 torch.sqrt(2 * torch.pi * self.sigma_rad ** 2) * \
-                    torch.exp(-(self.theta - phi) ** 2 / (2 * self.sigma_ang ** 2))/ \
+                    torch.exp(-(theta - self.phi) ** 2 / (2 * self.sigma_ang ** 2))/ \
                         torch.sqrt(2 * torch.pi * self.sigma_ang ** 2)
         
         return unscaled_firing_rate
@@ -99,10 +112,17 @@ class BVC:
         The firing rate is found by integrating to find the net contribution of all the environment's boundaries
         '''
         n_boundaries = len(distances)
-        net_unscaled_firing_rates = torch.stack([self.obtain_firing_rate_single_boundary(distances[i], bearings[i]) for i in range(n_boundaries)], dim=0)
-        # print(net_unscaled_firing_rates)
+        
+        unscaled_firing_rates = torch.stack([self.obtain_firing_rate_single_boundary(distances[i], bearings[i]) for i in range(n_boundaries)], dim=0)
+        
         subtended_angles = torch.stack(subtended_angles, dim=0)
-        return self.scaling_factor * torch.sum(torch.multiply(net_unscaled_firing_rates, subtended_angles), dim=0)
+        
+        firing_rates = self.multiplier * torch.sum(torch.multiply(unscaled_firing_rates, subtended_angles), dim=0)
+        
+        if self.maxfire is not False:
+            return torch.clamp(firing_rates, min=None, max=self.maxfire)
+        else:
+            return firing_rates
 
 
 class BVCNetwork:
