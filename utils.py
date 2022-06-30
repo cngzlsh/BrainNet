@@ -187,7 +187,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', n=200):
         ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
         ax.set_theta_direction(-1)
         ax.set_theta_zero_location('N', offset=0)
-        firing_rates = bvcs[i].obtain_firing_rate_single_boundary(ds_mat, rads_mat)
+        firing_rates = bvcs[i].compute_BVC_firing_single_boundary(ds_mat, rads_mat)
         ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
     plt.show()
 
