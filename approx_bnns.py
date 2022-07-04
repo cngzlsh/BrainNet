@@ -14,19 +14,28 @@ class RandomActivation(nn.Module):
     '''
     Custom non-linearity layer, applies a random non-linearity for each dimension
     Mimics neuronal network where each neuron has slightly different activation
+    transfer functions are ReLU(), SiLU(), LeakyReLU(), Sigmoid(), Tanh(), etc.
     '''
     def __init__(self, _dim, transfer_functions: list):
         super().__init__()
 
         self.transfer_functions = random.choices(transfer_functions, k=_dim)
         self.dim = _dim
+        self.max_output = dist.Poisson(rate=10).sample(sample_shape=torch.Size([_dim])).to(device) # not sure what to set the max as??
     
-    def load_params(self, saved_transfer_functions):
-        self.transfer_functions = saved_transfer_functions
+    def load_params(self, key):
+        if isinstance(key, torch.Tensor):
+            assert key.shape == self.max_output.shape
+            self.max_output = key   # loads max_output
+        else:
+            assert len(key) == len(self.transfer_functions)
+            self.transfer_functions = key   # loaders transfer functions
 
     def forward(self, x):
         # x: [batch_size, dim]
-        return torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
+        unclipped_output = torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
+        return torch.minimum(unclipped_output, self.max_output.repeat([unclipped_output.shape[0],1]))
+
 
 class FeedForwardApproximateBNN(nn.Module):
     '''
@@ -177,8 +186,9 @@ class ResidualApproximateBNN(nn.Module):
 class RecurrentApproximateBNN(nn.Module):
     '''
     An approximately biological network with recurrent connections: hidden L4 -> hidden L1
-
-    :param x:               hidden units in each layer
+8.4794e+04, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.3830e+05, 1.0001e+05,
+         1.0000e+00, 8.6347e+04, 1.2372e+05, 8.6820e+04, 1.0000e+00, 5.2773e+04,
+         1.1521e+05, 1.2773e+05, 6.1236e+04, 1.0000e+00            hidden units in each layer
     :param y:               probability of randomly disabling weight (connection between each two neurons)
     :param z:               number of hidden layers
     :param recurrent_dim:   dimension of recurrent state. By default same as x
@@ -317,7 +327,7 @@ class ComplexApproximateBNN(nn.Module):
 
         # store hidden layers in a list
         self.hidden_layers = nn.ModuleList([])
-        for hidden_idx in range(self.z):
+        for _ in range(self.z):
                 # hidden 1: recurrent from hidden 4
                 # hidden 2: recurrent from layer 2
                 # hidden 3: skip from layer 1
@@ -333,18 +343,10 @@ class ComplexApproximateBNN(nn.Module):
         # backprojection
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
 
-        def apply_connectivity(mixture=(0.8, 0.2), component_mean=(-1,1), component_std=(1,1)):
-            '''
-            Weight initialisation is a mixture of Gaussian, 75% excitatory ~ N(1,1) and 25% inhibitory ~ N(-1,1)
-            with random dropout probability 1-y
-            Bias is initialised as N(0,1)
-            '''
-            mixture_distribution = dist.Categorical(torch.Tensor(mixture))
-            component_distributions = dist.Independent(dist.Normal(torch.Tensor(component_mean),torch.Tensor(component_std)),0)
-            MoG = dist.MixtureSameFamily(mixture_distribution=mixture_distribution, component_distribution=component_distributions)
+        def apply_connectivity():
 
             # input layer
-            self.input_layer.weight.data = MoG.sample(self.input_layer.weight.data.shape)
+            nn.init.normal_(self.input_layer.weight, mean=0, std=1)
             nn.init.normal_(self.input_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
             self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
@@ -352,7 +354,7 @@ class ComplexApproximateBNN(nn.Module):
             # hidden layers
             for layer in self.hidden_layers:
                 if isinstance(layer, nn.Linear):
-                    layer.weight.data = MoG.sample(layer.weight.data.shape)
+                    nn.init.normal_(layer.weight, mean=0, std=1)
                     nn.init.normal_(layer.bias, mean=0, std=1)
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
@@ -368,13 +370,13 @@ class ComplexApproximateBNN(nn.Module):
             self.lateral_inhibition_layer.weight = nn.Parameter(torch.mul(self.lateral_inhibition_layer.weight, mask))
 
             # output layer
-            self.output_layer.weight.data = MoG.sample(self.output_layer.weight.data.shape)
+            nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             nn.init.normal_(self.output_layer.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
             # backprojection
-            self.recurrent_connection.weight.data = MoG.sample(self.recurrent_connection.weight.data.shape)
+            nn.init.normal_(self.output_layer.bias, mean=-1, std=1)
             nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
             self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
@@ -399,6 +401,7 @@ class ComplexApproximateBNN(nn.Module):
         for name, module in self.named_modules():
             if isinstance(module, RandomActivation):
                 _dict[name] = module.transfer_functions
+                _dict[name+'_max_fr'] = module.max_output
         return _dict
 
     def load_non_linearities(self, _dict):
@@ -408,35 +411,52 @@ class ComplexApproximateBNN(nn.Module):
         for name, module in self.named_modules():
             if isinstance(module, RandomActivation):
                 module.load_params(_dict[name])
+                module.load_params(_dict[name+'_max_fr'])
+        print('Non-linearities loaded successfully.')
 
-    def gaussian_plasticity_update(self, sigma):
+
+    def gaussian_plasticity_update(self, sigma, alpha=1):
         '''
         Mimics neuronal plasticity dynamics, slightly alter each non-zero weight by injecting a small Gaussian noise to all layers
+
+        params:
+        sigma:      scalar, std of Gaussian noise
+        alpha:      scalar between 0 and 1. Proportion of weights to change
         '''
         # input layer
-        non_zero_mask = 1 * (self.input_layer.weight.data != 0)
+        non_zero_mask = torch.multiply(
+            dist.Bernoulli(probs=alpha).sample(sample_shape=self.input_layer.weight.data.shape).to(device), 
+            (self.input_layer.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.input_layer.weight.data.shape).to(device)
         self.input_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # hidden layers
         for layer in self.hidden_layers:
             if isinstance(layer, nn.Linear):
-                non_zero_mask = 1 * (layer.weight.data != 0)
+                non_zero_mask = torch.multiply(
+                    dist.Bernoulli(probs=alpha).sample(sample_shape=layer.weight.data.shape).to(device),
+                    (layer.weight.data != 0))
                 gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=layer.weight.data.shape).to(device)
                 layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
         
         # output layer
-        non_zero_mask = 1 * (self.output_layer.weight.data != 0)
+        non_zero_mask = torch.multiply(
+            dist.Bernoulli(probs=alpha).sample(sample_shape=self.output_layer.weight.data.shape).to(device), 
+            (self.output_layer.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.output_layer.weight.data.shape).to(device)
         self.output_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # lateral inhibition layer
-        non_zero_mask = 1 * (self.lateral_inhibition_layer.weight.data != 0)
+        non_zero_mask = torch.multiply(
+            dist.Bernoulli(probs=alpha).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device), 
+            (self.lateral_inhibition_layer.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device)
         self.lateral_inhibition_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # backprojection
-        non_zero_mask = 1 * (self.recurrent_connection.weight.data != 0)
+        non_zero_mask = non_zero_mask = torch.multiply(
+            dist.Bernoulli(probs=alpha).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device), 
+            (self.recurrent_connection.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device)
         self.recurrent_connection.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
     
@@ -460,8 +480,8 @@ class ComplexApproximateBNN(nn.Module):
             temp_outputs = [None] * (self.z + 1)
             temp_outputs[0] = temp
 
-            self.backprojection_state = F.normalize(self.backprojection_state) # normalise recurrent state to ensure no nan
-            self.lateral_inhibition_state = F.normalize(self.lateral_inhibition_state)
+            # self.backprojection_state = F.normalize(self.backprojection_state) # normalise recurrent state to ensure no nan
+            # self.lateral_inhibition_state = F.normalize(self.lateral_inhibition_state)
 
             for hidden_idx in range(self.z):
                 
@@ -490,23 +510,3 @@ class ComplexApproximateBNN(nn.Module):
             y[:,t,:] = self.output_activation(self.output_layer(temp_outputs[-1]))
 
         return y
-
-
-if __name__ == '__main__':
-    x = 256             # number of hidden units in each layer
-    y = 0.5             # network connectivity
-    z = 4               # number of layers
-    bias = True         # whether to use bias
-    trainable = False   # whether the network is trainable
-
-    residual_in =[False, False, 1, 2]
-
-    input_dim = 16
-    output_dim = 16
-
-    approx_bnn = RecurrentApproximateBNN(x, y, z, input_dim, output_dim, recurrent_dim=-1, transfer_function=nn.ReLU(), bias=bias, trainable=trainable).to(device)
-    for name, params in approx_bnn.named_parameters():
-        print(name, params.data)
-
-    X = torch.distributions.Bernoulli(0.5).sample(sample_shape=[1, 10,16]).to(device)
-    approx_bnn(X)

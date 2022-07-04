@@ -186,4 +186,4 @@ class PlaceCell:
         xi = torch.pow((Fj/F0), p) * Fj
         dW = [D * BVC_firings[i] *Phi(PC_firing, xi) for i in range(self.n_bvcs)]
         
-        return dW
+        return dW                   

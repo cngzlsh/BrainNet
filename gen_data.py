@@ -80,7 +80,6 @@ def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq,
     X = dist.Poisson(rate=mean_freq).sample(sample_shape=torch.Size([n_data_points]))
     
     Y = BNN(X)
-    Y = normalise_data(Y)
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
@@ -119,7 +118,6 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
     X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas, time_steps=time_steps) for _ in range( n_data_points)]).to(device)
     
     Y = BNN(X)
-    Y = normalise_data(Y)
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
@@ -128,36 +126,26 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
     return X.cpu(), Y.cpu()
 
 
-def apply_plasticity_and_generate_new_output(BNN, BNN_weights, X_train, X_test, sigma, verbose=True):
+def apply_plasticity_and_generate_new_output(BNN, BNN_params:tuple, X_train, X_test, sigma, alpha, verbose=True):
     '''
     Slightly alter each non-zero weight in the biological neural network, and generate new output patterns
     '''
     
-    BNN.load_state_dict(torch.load(BNN_weights))
-    BNN.gaussian_plasticity_update(sigma)
+    BNN.load_state_dict(BNN_params[0])
+    BNN.load_non_linearities(BNN_params[1])
+
+    BNN.gaussian_plasticity_update(sigma, alpha)
     
     if verbose:
         print('\t Plasticity applied.')
     
-    Y_train = normalise_data(BNN(X_train))
-    Y_test = normalise_data(BNN(X_test))
+    _Y_train = BNN(X_train.to(device))
+    _Y_test = BNN(X_test.to(device))
 
     if verbose:
         print('\t New output patterns generated')
-    return Y_train, Y_test
 
-
-def generate_bvc_network_firing_pattern(n_data_points, n_cells, preferred_distances, preferred_orientations, sigma_rads, sigma_angs):
-    
-    BVCs = [BVC(r= preferred_distances[i], theta=preferred_orientations[i], sigma_rad=sigma_rads[i], sigma_ang=sigma_angs[i], scaling_factor=1) for i in range(n_cells)]
-    model = BVCNetwork(BVCs=BVCs, coeff=1, threshold=0, non_linearity=nn.ReLU())
-
-    ds = dist.uniform.Uniform(low=0, high=10).sample(sample_shape=torch.Size([n_data_points]))
-    phis = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(sample_shape=torch.Size([n_data_points]))
-
-    X = torch.stack((ds, phis), dim=-1)
-    Y = model.obtain_firing_rate(ds, phis)[:, None]
-    return X.cpu(), Y.cpu()
+    return _Y_train, _Y_test
 
 
 if __name__ == '__main__':
@@ -180,43 +168,54 @@ if __name__ == '__main__':
 
     time_steps = 50
     gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
-    transfer_functions=[nn.ReLU(), nn.Sigmoid(), nn.Tanh(), nn.LeakyReLU(0.1), nn.SELU()]
+    transfer_functions=[nn.ReLU(), nn.ELU(), nn.SiLU(), nn.CELU(), nn.Tanh(), nn.Sigmoid(), nn.LeakyReLU(0.1), nn.LeakyReLU(0.2), nn.LeakyReLU(0.3)]
 
-    approx_bnn = ComplexApproximateBNN(
+    approx_bnn = FeedForwardApproximateBNN(
         x=x, y=y, z=z,
         input_dim=input_dim,
         output_dim=output_dim, 
-        residual_in=residual_in,
-        recurrent_dim=-1,
+        # residual_in=residual_in,
+        # recurrent_dim=-1,
         transfer_functions=transfer_functions
         ).to(device)
 
-    torch.save(approx_bnn.state_dict(), f'./approx_bnn_params/cplx_abnn_{x}_{y}_{z}.pt')
-    save_non_linearities(approx_bnn.save_non_linearities(), './approx_bnn_params/', f'cplx_abnn_{x}_{y}_{z}_random_activation.pkl')
-    # approx_bnn.gaussian_weight_update(sigma=0.1)
+    # BNN_weights = torch.load('./approx_bnn_params/complex.pt')
+    # BNN_non_linearities = load_non_linearities('./approx_bnn_params/complex_non_linearities.pkl')
 
+    # approx_bnn.load_state_dict(BNN_weights)
+    # approx_bnn.load_non_linearities(BNN_non_linearities)
 
-    X_train, Y_train = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_train, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_train, Y_train, './data/', f'cplx_train_abnn_{x}_{y}_{z}_2.pkl')
+    X_train, Y_train = generate_stochastic_firing_pattern(
+        BNN=approx_bnn, 
+        input_dim=input_dim, 
+        n_data_points=num_train, 
+        # alphas=alphas, 
+        # betas=betas, 
+        mean_freq=mean_freq,
+        # time_steps=time_steps,
+        gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'train_feedforward.pkl')
 
-    X_test, Y_test = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_test, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_test, Y_test, './data/', f'cplx_test_abnn_{x}_{y}_{z}_2.pkl')
+    X_test, Y_test = generate_stochastic_firing_pattern(
+        BNN=approx_bnn, 
+        input_dim=input_dim,
+        n_data_points=num_test, 
+        # alphas=alphas, 
+        # betas=betas, 
+        mean_freq=mean_freq,
+        # time_steps=time_steps, 
+        gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'test_feedforward.pkl')
 
-    X_valid, Y_valid = generate_time_dependent_stochastic_pattern(BNN=approx_bnn, input_dim=input_dim, n_data_points=num_valid, alphas=alphas, betas=betas, time_steps=time_steps, gaussian_noise=False)
-    # save_data(X_valid, Y_valid, './data/', f'cplx_valid_abnn_{x}_{y}_{z}_2.pkl')
+    X_valid, Y_valid = generate_stochastic_firing_pattern(
+        BNN=approx_bnn, 
+        input_dim=input_dim, 
+        n_data_points=num_valid, 
+        # alphas=alphas, 
+        # betas=betas, 
+        mean_freq=mean_freq,
+        # time_steps=time_steps, 
+        gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'valid_feedforward.pkl')
 
-    # n_cells = 8             # number of BVCs to simulate
-    # num_train_input = 10000
-    # num_test_input = 1000
-
-    # # BVC preferred distances ~ Uniform(0, 10)
-    # preferred_distances = dist.uniform.Uniform(low=0, high=10).sample(torch.Size([n_cells]))
-    # # BVC preferred angles ~ Uniform(-pi, pi)
-    # preferred_orientations = dist.uniform.Uniform(low=-torch.pi, high=torch.pi).sample(torch.Size([n_cells]))
-    # sigma_rads = torch.ones(n_cells)
-    # sigma_angs = torch.ones(n_cells)
-
-    # X_train, Y_train = generate_bvc_network_firing_pattern(n_data_points=num_train_input, n_cells=n_cells, preferred_distances=preferred_distances, preferred_orientations=preferred_orientations, sigma_rads=sigma_rads, sigma_angs=sigma_angs)
-    # save_data(X_train, Y_train, './data/', f'train_bvc.pkl')
-    # X_test, Y_test = generate_bvc_network_firing_pattern(n_data_points=num_test_input, n_cells=n_cells, preferred_distances=preferred_distances, preferred_orientations=preferred_orientations, sigma_rads=sigma_rads, sigma_angs=sigma_angs)
-    # save_data(X_test, Y_test, './data/', f'test_bvc.pkl')
+    # Y_train_s, _ = apply_plasticity_and_generate_new_output(approx_bnn, (BNN_weights, BNN_non_linearities), X_train, X_test, sigma=0.0002, alpha=1, verbose=True)
