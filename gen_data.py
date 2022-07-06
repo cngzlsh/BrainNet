@@ -141,9 +141,9 @@ def apply_plasticity_and_generate_new_output(BNN, BNN_params:tuple, X_train, X_t
     
     _Y_train = BNN(X_train.to(device))
     _Y_test = BNN(X_test.to(device))
-
+    
     if verbose:
-        print('\t New output patterns generated')
+        print('\t New output patterns generated.')
 
     return _Y_train, _Y_test
 
@@ -167,55 +167,53 @@ if __name__ == '__main__':
     betas = dist.Poisson(rate=mean_freq*2).sample(sample_shape=torch.Size([input_dim]))
 
     time_steps = 50
-    gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.001]))
     transfer_functions=[nn.ReLU(), nn.ELU(), nn.SiLU(), nn.CELU(), nn.Tanh(), nn.Sigmoid(), nn.LeakyReLU(0.1), nn.LeakyReLU(0.2), nn.LeakyReLU(0.3)]
 
-    approx_bnn = FeedForwardApproximateBNN(
+    approx_bnn = ComplexApproximateBNN(
         x=x, y=y, z=z,
         input_dim=input_dim,
         output_dim=output_dim, 
-        # residual_in=residual_in,
-        # recurrent_dim=-1,
+        residual_in=residual_in,
+        recurrent_dim=-1,
         transfer_functions=transfer_functions
         ).to(device)
 
-    # BNN_weights = torch.load('./approx_bnn_params/complex.pt')
-    # BNN_non_linearities = load_non_linearities('./approx_bnn_params/complex_non_linearities.pkl')
 
-    # approx_bnn.load_state_dict(BNN_weights)
-    # approx_bnn.load_non_linearities(BNN_non_linearities)
+    torch.save(approx_bnn.state_dict(), './approx_bnn_params/complex.pt')
+    save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
 
-    X_train, Y_train = generate_stochastic_firing_pattern(
+
+    X_train, Y_train = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
         input_dim=input_dim, 
         n_data_points=num_train, 
-        # alphas=alphas, 
-        # betas=betas, 
-        mean_freq=mean_freq,
-        # time_steps=time_steps,
+        alphas=alphas, 
+        betas=betas, 
+        # mean_freq=mean_freq,
+        time_steps=time_steps,
         gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'train_feedforward.pkl')
+    save_data(X_train, Y_train, './data/', f'train_complex.pkl')
 
-    X_test, Y_test = generate_stochastic_firing_pattern(
+    X_test, Y_test = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
         input_dim=input_dim,
         n_data_points=num_test, 
-        # alphas=alphas, 
-        # betas=betas, 
-        mean_freq=mean_freq,
-        # time_steps=time_steps, 
+        alphas=alphas, 
+        betas=betas, 
+        # mean_freq=mean_freq,
+        time_steps=time_steps, 
         gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'test_feedforward.pkl')
+    save_data(X_test, Y_test, './data/', f'test_complex.pkl')
 
-    X_valid, Y_valid = generate_stochastic_firing_pattern(
+    X_valid, Y_valid = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
         input_dim=input_dim, 
         n_data_points=num_valid, 
-        # alphas=alphas, 
-        # betas=betas, 
-        mean_freq=mean_freq,
-        # time_steps=time_steps, 
+        alphas=alphas, 
+        betas=betas, 
+        # mean_freq=mean_freq,
+        time_steps=time_steps, 
         gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'valid_feedforward.pkl')
+    save_data(X_valid, Y_valid, './data/', f'valid_complex.pkl')
 
     # Y_train_s, _ = apply_plasticity_and_generate_new_output(approx_bnn, (BNN_weights, BNN_non_linearities), X_train, X_test, sigma=0.0002, alpha=1, verbose=True)

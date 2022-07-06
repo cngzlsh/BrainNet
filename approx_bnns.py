@@ -10,6 +10,7 @@ torch.manual_seed(seed)
 random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 class RandomActivation(nn.Module):
     '''
     Custom non-linearity layer, applies a random non-linearity for each dimension
@@ -21,20 +22,21 @@ class RandomActivation(nn.Module):
 
         self.transfer_functions = random.choices(transfer_functions, k=_dim)
         self.dim = _dim
-        self.max_output = dist.Poisson(rate=10).sample(sample_shape=torch.Size([_dim])).to(device) # not sure what to set the max as??
+        self.max_output = dist.Poisson(rate=25).sample(sample_shape=torch.Size([_dim])).to(device)
+        self.min_output = -dist.Poisson(rate=25).sample(sample_shape=torch.Size([_dim])).to(device)
     
-    def load_params(self, key):
-        if isinstance(key, torch.Tensor):
-            assert key.shape == self.max_output.shape
-            self.max_output = key   # loads max_output
-        else:
-            assert len(key) == len(self.transfer_functions)
-            self.transfer_functions = key   # loaders transfer functions
+    def load_params(self, params:tuple):
+        tr, max_fr, min_fr = params
+        self.transfer_functions = tr
+        self.max_output = max_fr.to(device)
+        self.min_output = min_fr.to(device)
 
     def forward(self, x):
         # x: [batch_size, dim]
         unclipped_output = torch.stack([self.transfer_functions[i](x[:, i]) for i in range(self.dim)], dim=-1)
-        return torch.minimum(unclipped_output, self.max_output.repeat([unclipped_output.shape[0],1]))
+        return torch.maximum(
+            torch.minimum(unclipped_output, self.max_output.repeat([unclipped_output.shape[0],1])),
+                 self.min_output.repeat([unclipped_output.shape[0],1]))
 
 
 class FeedForwardApproximateBNN(nn.Module):
@@ -318,9 +320,6 @@ class ComplexApproximateBNN(nn.Module):
         self.residual_in = residual_in
         self.recurrent_dim = x if recurrent_dim == -1 else recurrent_dim
         self.activations = [RandomActivation(_dim=x, transfer_functions=transfer_functions) for _ in range(z+1)] # input layer and z hidden layers
-        self.lateral_inhibition_activation = RandomActivation(_dim=x, transfer_functions=transfer_functions)
-        self.recurrent_activation = RandomActivation(_dim = self.recurrent_dim, transfer_functions=transfer_functions)
-        self.output_activation = RandomActivation(_dim=output_dim, transfer_functions=transfer_functions)
 
         # input layer
         self.input_layer = nn.Linear(input_dim, x, bias=bias)
@@ -336,12 +335,15 @@ class ComplexApproximateBNN(nn.Module):
         
         # lateral inhibition layer
         self.lateral_inhibition_layer = nn.Linear(x, x, bias=bias)
+        self.lateral_inhibition_activation = RandomActivation(_dim=x, transfer_functions=transfer_functions)
 
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
+        self.output_activation = RandomActivation(_dim=output_dim, transfer_functions=transfer_functions)
 
         # backprojection
         self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
+        self.recurrent_activation = RandomActivation(_dim = self.recurrent_dim, transfer_functions=transfer_functions)
 
         def apply_connectivity():
 
@@ -393,29 +395,33 @@ class ComplexApproximateBNN(nn.Module):
         
         apply_connectivity()
     
-    def save_non_linearities(self):
+    def extract_non_linearities(self):
         '''
-        Saves RandomActivation to a dictionary
+        Saves RandomActivation() parameters to a dictionary
         '''
         _dict = {}
-        for name, module in self.named_modules():
-            if isinstance(module, RandomActivation):
-                _dict[name] = module.transfer_functions
-                _dict[name+'_max_fr'] = module.max_output
+
+        for i, activation_function in enumerate(self.activations):
+            _dict[str(i)] = (activation_function.transfer_functions, activation_function.max_output.cpu(), activation_function.min_output.cpu())
+        _dict['lateral'] = (self.lateral_inhibition_activation.transfer_functions, self.lateral_inhibition_activation.max_output.cpu(), self.lateral_inhibition_activation.min_output.cpu())
+        _dict['recurrent'] = (self.recurrent_activation.transfer_functions, self.recurrent_activation.max_output.cpu(), self.recurrent_activation.min_output.cpu())
+        _dict['output'] = (self.output_activation.transfer_functions, self.output_activation.max_output.cpu(), self.output_activation.min_output.cpu())
+
         return _dict
 
     def load_non_linearities(self, _dict):
         '''
-        Loads RandomActivation from a dictionary
+        Loads RandomActivation parameters from a dictionary
         '''
-        for name, module in self.named_modules():
-            if isinstance(module, RandomActivation):
-                module.load_params(_dict[name])
-                module.load_params(_dict[name+'_max_fr'])
+        for i, activation_function in enumerate(self.activations):
+            activation_function.load_params(_dict[str(i)])
+        self.lateral_inhibition_activation.load_params(_dict['lateral'])
+        self.recurrent_activation.load_params(_dict['recurrent'])
+        self.output_activation.load_params(_dict['output'])
         print('Non-linearities loaded successfully.')
 
 
-    def gaussian_plasticity_update(self, sigma, alpha=1):
+    def gaussian_plasticity_update(self, sigma, alpha):
         '''
         Mimics neuronal plasticity dynamics, slightly alter each non-zero weight by injecting a small Gaussian noise to all layers
 
@@ -427,7 +433,9 @@ class ComplexApproximateBNN(nn.Module):
         non_zero_mask = torch.multiply(
             dist.Bernoulli(probs=alpha).sample(sample_shape=self.input_layer.weight.data.shape).to(device), 
             (self.input_layer.weight.data != 0))
+        # gaussian_noise = torch.zeros_like(self.input_layer.weight.data)
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.input_layer.weight.data.shape).to(device)
+        
         self.input_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # hidden layers
@@ -437,13 +445,16 @@ class ComplexApproximateBNN(nn.Module):
                     dist.Bernoulli(probs=alpha).sample(sample_shape=layer.weight.data.shape).to(device),
                     (layer.weight.data != 0))
                 gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=layer.weight.data.shape).to(device)
+                # gaussian_noise = torch.zeros_like(layer.weight.data)
                 layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
         
         # output layer
         non_zero_mask = torch.multiply(
             dist.Bernoulli(probs=alpha).sample(sample_shape=self.output_layer.weight.data.shape).to(device), 
             (self.output_layer.weight.data != 0))
+
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.output_layer.weight.data.shape).to(device)
+        # gaussian_noise = torch.zeros_like(self.output_layer.weight.data)
         self.output_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # lateral inhibition layer
@@ -451,6 +462,7 @@ class ComplexApproximateBNN(nn.Module):
             dist.Bernoulli(probs=alpha).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device), 
             (self.lateral_inhibition_layer.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device)
+        # gaussian_noise = torch.zeros_like(self.lateral_inhibition_layer.weight.data)
         self.lateral_inhibition_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
         # backprojection
@@ -458,6 +470,7 @@ class ComplexApproximateBNN(nn.Module):
             dist.Bernoulli(probs=alpha).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device), 
             (self.recurrent_connection.weight.data != 0))
         gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device)
+        # gaussian_noise = torch.zeros_like(self.recurrent_connection.weight.data)
         self.recurrent_connection.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
     
     def forward(self, x):
