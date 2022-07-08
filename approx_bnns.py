@@ -418,7 +418,6 @@ class ComplexApproximateBNN(nn.Module):
         self.lateral_inhibition_activation.load_params(_dict['lateral'])
         self.recurrent_activation.load_params(_dict['recurrent'])
         self.output_activation.load_params(_dict['output'])
-        print('Non-linearities loaded successfully.')
 
 
     def gaussian_plasticity_update(self, sigma, alpha):

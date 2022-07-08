@@ -22,10 +22,16 @@ class FeedForwardDNN(nn.Module):
 
         # output layer
         self.layers.add_module('output', nn.Linear(hidden_dim, output_dim))
+    
+    def reset(self):
+        for layer in self.layers:
+            if isinstance(layer, nn.Linear):
+                layer.reset_parameters()
 
     def forward(self, input_pattern):
         return self.layers(input_pattern)
     
+
 class RecurrentDNN(nn.Module):
     '''
     Deep neural network with LSTM units
@@ -51,6 +57,14 @@ class RecurrentDNN(nn.Module):
 
         # output layer
         self.output_layer = nn.Linear(hidden_dim, output_dim)
+    
+    def reset(self):
+        self.input_layer.reset_parameters()
+        for layer in self.hidden_linears:
+            if isinstance(layer, nn.Linear):
+                layer.reset_parameters()
+        self.output_layer.reset_parameters()
+        self.hidden_lstms.reset_parameters()
     
     def forward(self, x, rec_prev):
 

@@ -126,11 +126,19 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
     return X.cpu(), Y.cpu()
 
 
-def apply_plasticity_and_generate_new_output(BNN, BNN_params:tuple, X_train, X_test, sigma, alpha, verbose=True):
+def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
     '''
     Slightly alter each non-zero weight in the biological neural network, and generate new output patterns
     '''
     
+    # unpack arguments
+    BNN = kwargs['BNN']
+    BNN_params = kwargs['BNN_params']
+    X_train = kwargs['X_train']
+    X_test = kwargs['X_test']
+    verbose = True if kwargs['verbose'] == 2 else False
+    
+    # initialise BNN
     BNN.load_state_dict(BNN_params[0])
     BNN.load_non_linearities(BNN_params[1])
 
