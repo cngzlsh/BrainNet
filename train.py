@@ -427,8 +427,11 @@ def repeated_plasticity_analysis(n_repeats, transfer_learning, **kwargs):
         train_losses_by_sigma_tensor[i,:] = train_losses_by_sigma
         eval_losses_by_sigma_tensor[i,:] = eval_losses_by_sigma
         init_losses_by_sigma_tensor[i] = init_eval_losses_by_sigma
+
+    means = (torch.mean(train_losses_by_sigma_tensor, 0), torch.mean(eval_losses_by_sigma_tensor, 0), torch.mean(init_losses_by_sigma_tensor, 0))
+    stds = (torch.std(train_losses_by_sigma_tensor, 0), torch.std(eval_losses_by_sigma_tensor, 0), torch.std(init_losses_by_sigma_tensor, 0))
         
-    return torch.mean(train_losses_by_sigma_tensor, 0), torch.mean(eval_losses_by_sigma_tensor, 0), torch.mean(init_losses_by_sigma_tensor, 0)
+    return means, stds
 
 
 
