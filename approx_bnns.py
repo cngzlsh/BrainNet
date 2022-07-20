@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.distributions as dist
 import torch.nn.functional as F
 import random
+import copy
 
 seed = 1234
 torch.manual_seed(seed)
@@ -17,14 +18,19 @@ class RandomActivation(nn.Module):
     Mimics neuronal network where each neuron has slightly different activation
     transfer functions are ReLU(), SiLU(), LeakyReLU(), Sigmoid(), Tanh(), etc.
     '''
-    def __init__(self, _dim, transfer_functions: list):
+    def __init__(self, _dim, transfer_functions: list, max_fr=False):
         super().__init__()
 
         self.transfer_functions = random.choices(transfer_functions, k=_dim)
         self.dim = _dim
-        self.max_output = dist.Poisson(rate=25).sample(sample_shape=torch.Size([_dim])).to(device)
-        self.min_output = -dist.Poisson(rate=25).sample(sample_shape=torch.Size([_dim])).to(device)
-    
+
+        if max_fr:
+            self.max_output = dist.Poisson(rate=50).sample(sample_shape=torch.Size([_dim])).to(device)
+            self.min_output = -dist.Poisson(rate=50).sample(sample_shape=torch.Size([_dim])).to(device)
+        else:
+            self.max_output = torch.Tensor([float('inf')]).to(device)
+            self.min_output = -torch.Tensor([float('inf')]).to(device)
+
     def load_params(self, params:tuple):
         tr, max_fr, min_fr = params
         self.transfer_functions = tr
@@ -221,10 +227,6 @@ class RecurrentApproximateBNN(nn.Module):
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
         self.output_activation = RandomActivation(transfer_functions=transfer_functions, _dim=output_dim)
 
-        # projection to hidden state
-        self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
-        self.recurrent_activation = RandomActivation(transfer_functions=transfer_functions, _dim=x)
-
         def apply_connectivity(): # makes the network more biologically plausible
             # input layer
             nn.init.normal_(self.input_layer.weight, mean=0, std=1)
@@ -250,19 +252,11 @@ class RecurrentApproximateBNN(nn.Module):
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
-            # recurrent connection
-            nn.init.normal_(self.recurrent_connection.weight, mean=0, std=1)
-            nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
-            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
-            self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
-
             if not trainable:
                 self.input_layer.weight.requires_grad = False
                 self.input_layer.bias.requires_grad = False
                 self.output_layer.weight.requires_grad = False
                 self.output_layer.bias.requires_grad = False
-                self.recurrent_connection.weight.requires_grad = False
-                self.recurrent_connection.bias.requires_grad = False
         
         apply_connectivity()
     
@@ -281,16 +275,13 @@ class RecurrentApproximateBNN(nn.Module):
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
             temp = self.input_activation(temp) # (batch_size, hidden_dim)
 
-            self.recurrent_state = F.normalize(self.recurrent_state) # normalise recurrent state to ensure no nan
-
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
             temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
 
+            self.recurrent_state = F.normalize(temp)
+
             yt = self.output_layer(temp)         # (batch_size, output_dim)
             y[:,t,:] = self.output_activation(yt)
-            
-            ht = self.recurrent_connection(temp) # (batch_size, recurrent_dim)
-            self.recurrent_state = self.recurrent_activation(ht)
 
         return y
 
@@ -332,18 +323,10 @@ class ComplexApproximateBNN(nn.Module):
                 # hidden 3: skip from layer 1
                 # hidden 4: skip from layer 2
                 self.hidden_layers.append(nn.Linear(2*x, x, bias=bias))
-        
-        # lateral inhibition layer
-        self.lateral_inhibition_layer = nn.Linear(x, x, bias=bias)
-        self.lateral_inhibition_activation = RandomActivation(_dim=x, transfer_functions=transfer_functions)
 
         # output layer
         self.output_layer = nn.Linear(x, output_dim, bias=bias)
         self.output_activation = RandomActivation(_dim=output_dim, transfer_functions=transfer_functions)
-
-        # backprojection
-        self.recurrent_connection = nn.Linear(x, self.recurrent_dim, bias=bias)
-        self.recurrent_activation = RandomActivation(_dim = self.recurrent_dim, transfer_functions=transfer_functions)
 
         def apply_connectivity():
 
@@ -353,23 +336,27 @@ class ComplexApproximateBNN(nn.Module):
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.input_layer.weight.shape)
             self.input_layer.weight = nn.Parameter(torch.mul(self.input_layer.weight, mask))
 
+            # lateral inhibition weights
+            temp = torch.concat((torch.linspace(0, 0, x+1)[:-1], torch.linspace(0, 0, x+1)), dim=0)
+            lateral_inhibition_weights = dist.Normal(0, 1).sample(sample_shape=torch.Size([x,x]))
+            for i in range(x):
+                lateral_inhibition_weights[i,:] += temp[x-i: 2*x-i]
+            lateral_inhibition_weights.fill_diagonal_(0) # no inhibition on itself
+
             # hidden layers
-            for layer in self.hidden_layers:
+            for i, layer in enumerate(self.hidden_layers):
                 if isinstance(layer, nn.Linear):
                     nn.init.normal_(layer.weight, mean=0, std=1)
                     nn.init.normal_(layer.bias, mean=0, std=1)
+                    if i == 1:
+                        layer.weight.data[:, x:] = lateral_inhibition_weights
+                        
                     mask = dist.Bernoulli(probs=y).sample(sample_shape=layer.weight.shape)
                     layer.weight = nn.Parameter(torch.mul(layer.weight, mask))
 
                     if not trainable:
                         layer.weight.requires_grad = False
                         layer.bias.requires_grad = False
-            
-            # lateral inhibition layer
-            nn.init.normal_(self.lateral_inhibition_layer.weight, mean=-1, std=1)
-            nn.init.normal_(self.lateral_inhibition_layer.bias, mean=0, std=1)
-            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.lateral_inhibition_layer.weight.shape)
-            self.lateral_inhibition_layer.weight = nn.Parameter(torch.mul(self.lateral_inhibition_layer.weight, mask))
 
             # output layer
             nn.init.normal_(self.output_layer.bias, mean=0, std=1)
@@ -377,21 +364,11 @@ class ComplexApproximateBNN(nn.Module):
             mask = dist.Bernoulli(probs=y).sample(sample_shape=self.output_layer.weight.shape)
             self.output_layer.weight = nn.Parameter(torch.mul(self.output_layer.weight, mask))
 
-            # backprojection
-            nn.init.normal_(self.output_layer.bias, mean=-1, std=1)
-            nn.init.normal_(self.recurrent_connection.bias, mean=0, std=1)
-            mask = dist.Bernoulli(probs=y).sample(sample_shape=self.recurrent_connection.weight.shape)
-            self.recurrent_connection.weight = nn.Parameter(torch.mul(self.recurrent_connection.weight, mask))
-
             if not trainable:
                 self.input_layer.weight.requires_grad = False
                 self.input_layer.bias.requires_grad = False
                 self.output_layer.weight.requires_grad = False
                 self.output_layer.bias.requires_grad = False
-                self.lateral_inhibition_layer.weight.requires_grad = False
-                self.lateral_inhibition_layer.bias.requires_grad = False
-                self.recurrent_connection.weight.requires_grad = False
-                self.recurrent_connection.bias.requires_grad = False
         
         apply_connectivity()
     
@@ -403,8 +380,6 @@ class ComplexApproximateBNN(nn.Module):
 
         for i, activation_function in enumerate(self.activations):
             _dict[str(i)] = (activation_function.transfer_functions, activation_function.max_output.cpu(), activation_function.min_output.cpu())
-        _dict['lateral'] = (self.lateral_inhibition_activation.transfer_functions, self.lateral_inhibition_activation.max_output.cpu(), self.lateral_inhibition_activation.min_output.cpu())
-        _dict['recurrent'] = (self.recurrent_activation.transfer_functions, self.recurrent_activation.max_output.cpu(), self.recurrent_activation.min_output.cpu())
         _dict['output'] = (self.output_activation.transfer_functions, self.output_activation.max_output.cpu(), self.output_activation.min_output.cpu())
 
         return _dict
@@ -415,8 +390,6 @@ class ComplexApproximateBNN(nn.Module):
         '''
         for i, activation_function in enumerate(self.activations):
             activation_function.load_params(_dict[str(i)])
-        self.lateral_inhibition_activation.load_params(_dict['lateral'])
-        self.recurrent_activation.load_params(_dict['recurrent'])
         self.output_activation.load_params(_dict['output'])
 
 
@@ -456,21 +429,6 @@ class ComplexApproximateBNN(nn.Module):
         # gaussian_noise = torch.zeros_like(self.output_layer.weight.data)
         self.output_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
 
-        # lateral inhibition layer
-        non_zero_mask = torch.multiply(
-            dist.Bernoulli(probs=alpha).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device), 
-            (self.lateral_inhibition_layer.weight.data != 0))
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.lateral_inhibition_layer.weight.data.shape).to(device)
-        # gaussian_noise = torch.zeros_like(self.lateral_inhibition_layer.weight.data)
-        self.lateral_inhibition_layer.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
-
-        # backprojection
-        non_zero_mask = non_zero_mask = torch.multiply(
-            dist.Bernoulli(probs=alpha).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device), 
-            (self.recurrent_connection.weight.data != 0))
-        gaussian_noise = dist.Normal(loc=0, scale=sigma).sample(sample_shape=self.recurrent_connection.weight.data.shape).to(device)
-        # gaussian_noise = torch.zeros_like(self.recurrent_connection.weight.data)
-        self.recurrent_connection.weight.data += nn.Parameter(torch.mul(gaussian_noise, non_zero_mask))
     
     def forward(self, x):
         '''
@@ -504,9 +462,9 @@ class ComplexApproximateBNN(nn.Module):
                 if hidden_idx == 1: # second hidden layer receives lateral inhibition
                     temp = torch.concat((temp_outputs[1], self.lateral_inhibition_state), dim=-1)
                     temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](self.hidden_layers[1](temp))
-                    self.lateral_inhibition_state = self.lateral_inhibition_activation(self.lateral_inhibition_layer(temp_outputs[hidden_idx+1]))
+                    self.lateral_inhibition_state = F.normalize(temp_outputs[hidden_idx+1])
 
-                if hidden_idx not in [0,1]:
+                if hidden_idx not in set([0,1]):
                     if self.residual_in[hidden_idx]:
                     # if there is skip input, concat the input with the prev layer
                         temp_input = torch.concat((temp_outputs[hidden_idx], temp_outputs[self.residual_in[hidden_idx]]), dim=-1)
@@ -518,7 +476,9 @@ class ComplexApproximateBNN(nn.Module):
                         temp_input = temp_outputs[hidden_idx]
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
                         temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
-            self.backprojection_state = self.recurrent_activation(self.recurrent_connection(temp_outputs[-1])) # (batch_size, recurrent_dim)
+
+            self.backprojection_state = F.normalize(temp_outputs[-1])
+            
             y[:,t,:] = self.output_activation(self.output_layer(temp_outputs[-1]))
 
         return y

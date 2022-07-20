@@ -116,12 +116,14 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
         betas = torch.Tensor(torch.ones(input_dim) * betas)
 
     X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas, time_steps=time_steps) for _ in range( n_data_points)]).to(device)
-    
+
     Y = BNN(X)
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
+
+    Y = normalise_data(Y)
     
     return X.cpu(), Y.cpu()
 
@@ -147,8 +149,8 @@ def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
     if verbose:
         print('\t Plasticity applied.')
     
-    _Y_train = BNN(X_train.to(device))
-    _Y_test = BNN(X_test.to(device))
+    _Y_train = normalise_data(BNN(X_train.to(device)))
+    _Y_test = normalise_data(BNN(X_test.to(device)))
     
     if verbose:
         print('\t New output patterns generated.')
@@ -157,12 +159,13 @@ def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
 
 
 if __name__ == '__main__':
-    x = 256            # number of hidden units in each layer
+    x = 256             # number of hidden units in each layer
     y = 0.5             # network connectivity
     z = 4               # number of layers
     bias = True         # whether to use bias
     trainable = False   # whether the network is trainable
     residual_in = [False, False, 1, 2]
+    gaussian_noise = (torch.Tensor([0]), torch.Tensor([0.01]))
 
     input_dim = 16
     output_dim = 16
@@ -200,7 +203,7 @@ if __name__ == '__main__':
         # mean_freq=mean_freq,
         time_steps=time_steps,
         gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'train_complex.pkl')
+    save_data(X_train, Y_train, './data/', f'complex_train.pkl')
 
     X_test, Y_test = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
@@ -210,8 +213,8 @@ if __name__ == '__main__':
         betas=betas, 
         # mean_freq=mean_freq,
         time_steps=time_steps, 
-        gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'test_complex.pkl')
+        gaussian_noise=gaussian_noise)
+    save_data(X_test, Y_test, './data/', f'complex_test.pkl')
 
     X_valid, Y_valid = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
@@ -221,7 +224,7 @@ if __name__ == '__main__':
         betas=betas, 
         # mean_freq=mean_freq,
         time_steps=time_steps, 
-        gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'valid_complex.pkl')
+        gaussian_noise=gaussian_noise)
+    save_data(X_valid, Y_valid, './data/', f'complex_valid.pkl')
 
     # Y_train_s, _ = apply_plasticity_and_generate_new_output(approx_bnn, (BNN_weights, BNN_non_linearities), X_train, X_test, sigma=0.0002, alpha=1, verbose=True)

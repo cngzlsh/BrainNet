@@ -51,8 +51,13 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
 
         if verbose:
             epoch_end = time.time()
-            hrs, mins, secs = elapsed_time(start, epoch_end)
-            print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+            if num_epochs < 50:
+                hrs, mins, secs = elapsed_time(start, epoch_end)
+                print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+            else:
+                if epoch % 20 == 0:
+                    hrs, mins, secs = elapsed_time(start, epoch_end)
+                    print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
         if force_stop and i == 20:
             break
@@ -129,8 +134,13 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
 
         if verbose:
             epoch_end = time.time()
-            hrs, mins, secs = elapsed_time(start, epoch_end)
-            print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+            if num_epochs < 50:
+                hrs, mins, secs = elapsed_time(start, epoch_end)
+                print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+            else:
+                if epoch % 20 == 0:
+                    hrs, mins, secs = elapsed_time(start, epoch_end)
+                    print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
         if force_stop and i == 20:
             break

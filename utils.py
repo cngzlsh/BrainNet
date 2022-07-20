@@ -133,7 +133,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     plt.xlabel('Epochs')
     plt.ylabel(loss_func)
 
-    plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
+    plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs \n I love Phanis <3')
     plt.show()
 
 
@@ -142,10 +142,11 @@ def find_argmin_in_matrix(mat):
     Find the row and coloumn of the smallest element in a matrix
     '''
     nr, nc = mat.shape
+    print('I love Phanis <3')
     return int(np.argmin(mat)/nc), np.argmin(mat) - int(np.argmin(mat)/nc) * nc
 
 
-def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False, figsize=(12,10)):
+def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=False, figsize=(12,10)):
     '''
     Produces 3d scatter plot
     '''
@@ -160,8 +161,9 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, fname=False, figsize=(12
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt3d = ax.scatter(xyz[:,0], xyz[:,1], xyz[:,2], c=xyz[:,2])
-    cbar = plt.colorbar(plt3d)
-    cbar.set_label(z_label)
+    if colorbar:
+        cbar = plt.colorbar(plt3d)
+        cbar.set_label(z_label)
     if fname:
         plt.savefig('./figures/' + fname)
     plt.show()
@@ -177,7 +179,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', n=200):
     
     if max_d =='auto':
         max_d = int(max([i.d for i in bvcs]) * 1.5)
-    rads = torch.linspace(-torch.pi, torch.pi, n)
+    rads = torch.linspace(0, 2*torch.pi, n)
     ds = torch.linspace(0, max_d, n)
 
     rads_mat, ds_mat = torch.meshgrid(rads, ds)
@@ -187,7 +189,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', n=200):
         ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
         ax.set_theta_direction(-1)
         ax.set_theta_zero_location('N', offset=0)
-        firing_rates = bvcs[i].compute_BVC_firing_single_boundary(ds_mat, rads_mat)
+        firing_rates = bvcs[i].compute_BVC_firing_single_segment(ds_mat, rads_mat)
         ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
     plt.show()
 
@@ -201,6 +203,12 @@ def generate_locations(length, width, n):
 
     return xs, ys
 
-
-def compute_distance_and_angle_to_border(length, width, locations):
-    xs, ys = locations
+# computes the entropy of a tensor
+def calc_entropy(x:torch.Tensor):
+    '''
+    Computes the (Shannon) entropy of a tensor based on its empirical distribution
+    '''
+    x = x.flatten()
+    freq = x.unique(return_counts=True)[1]
+    probs = freq/torch.sum(freq)
+    return -torch.multiply(probs, torch.log(probs)).sum()
