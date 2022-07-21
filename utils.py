@@ -133,7 +133,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     plt.xlabel('Epochs')
     plt.ylabel(loss_func)
 
-    plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs \n I love Phanis <3')
+    plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
     plt.show()
 
 
