@@ -450,9 +450,6 @@ class ComplexApproximateBNN(nn.Module):
             temp_outputs = [None] * (self.z + 1)
             temp_outputs[0] = temp
 
-            # self.backprojection_state = F.normalize(self.backprojection_state) # normalise recurrent state to ensure no nan
-            # self.lateral_inhibition_state = F.normalize(self.lateral_inhibition_state)
-
             for hidden_idx in range(self.z):
                 
                 if hidden_idx == 0: # first hidden layer receives recurrent connection

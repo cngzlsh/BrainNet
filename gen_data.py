@@ -213,7 +213,7 @@ if __name__ == '__main__':
         betas=betas, 
         # mean_freq=mean_freq,
         time_steps=time_steps, 
-        gaussian_noise=gaussian_noise)
+        gaussian_noise=False)
     save_data(X_test, Y_test, './data/', f'complex_test.pkl')
 
     X_valid, Y_valid = generate_time_dependent_stochastic_pattern(
@@ -224,7 +224,7 @@ if __name__ == '__main__':
         betas=betas, 
         # mean_freq=mean_freq,
         time_steps=time_steps, 
-        gaussian_noise=gaussian_noise)
+        gaussian_noise=False)
     save_data(X_valid, Y_valid, './data/', f'complex_valid.pkl')
 
     # Y_train_s, _ = apply_plasticity_and_generate_new_output(approx_bnn, (BNN_weights, BNN_non_linearities), X_train, X_test, sigma=0.0002, alpha=1, verbose=True)
