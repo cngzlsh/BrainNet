@@ -5,6 +5,7 @@ from utils import *
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+import torch.nn.functional as F
 
 seed = 1234
 torch.manual_seed(seed)
@@ -57,7 +58,7 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
     return X.cpu(), Y.cpu()
 
 
-def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False):
+def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False, normalisation=None):
     '''
     A simple, approximately biological input pattern: {input_dim} input neurons into the approximate neuronal network,
     the input is the number of spikes in a very small time bin. The number of spikes for each presynaptic neuron follows
@@ -85,6 +86,11 @@ def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq,
         mu, sigma = gaussian_noise
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
+    if normalisation == 'Lp':
+        Y = F.normalize(Y)
+    elif normalisation == 'Z':
+        Y = normalise_data(Y)
+
     return X.cpu(), Y.cpu()
 
 def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
@@ -107,7 +113,7 @@ def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
     return bin_counts.float()
 
 
-def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
+def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False, normalisation=None):
     '''
     Generates time series of patterns
     '''
@@ -123,12 +129,15 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
         mu, sigma = gaussian_noise
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
-    Y = normalise_data(Y)
+    if normalisation == 'Lp':
+        Y = F.normalize(Y)
+    elif normalisation == 'Z':
+        Y = normalise_data(Y)
     
     return X.cpu(), Y.cpu()
 
 
-def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
+def apply_plasticity_and_generate_new_output(sigma, alpha=1, normalisation=None, **kwargs):
     '''
     Slightly alter each non-zero weight in the biological neural network, and generate new output patterns
     '''
@@ -149,8 +158,12 @@ def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
     if verbose:
         print('\t Plasticity applied.')
     
-    _Y_train = normalise_data(BNN(X_train.to(device)))
-    _Y_test = normalise_data(BNN(X_test.to(device)))
+    if normalisation == 'Lp':
+        _Y_train = F.normalize(_Y_train)
+        _Y_test = F.normalize(_Y_test)
+    elif normalisation == 'Z':
+        _Y_train = normalise_data(BNN(X_train.to(device)))
+        _Y_test = normalise_data(BNN(X_test.to(device)))
     
     if verbose:
         print('\t New output patterns generated.')

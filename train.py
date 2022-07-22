@@ -116,6 +116,7 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
         for i, (X, Y) in enumerate(iter(train_loader)): # X: [batch_size, time_step, input_dim]
             
             Y_hat, rec_prev = model(X, rec_prev)
+            
             loss = criterion(Y_hat, Y)
 
             optimiser.zero_grad()
@@ -358,7 +359,7 @@ def learning_with_plasticity(sigma, alpha=1, transfer_learning=True, **kwargs):
         DNN.load_state_dict(DNN_params)
     else:
         DNN.reset()
-        
+    
     optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
     criterion = nn.MSELoss()
     
@@ -420,7 +421,6 @@ def plasticity_analysis(transfer_learning, **kwargs):
             print(f'\t Inital eval loss: {sigma_init_eval_loss}, final eval loss: {sigma_eval_losses[-1]}')
         
     return train_losses_by_sigma, eval_losses_by_sigma, init_eval_losses_by_sigma
-
 
 def repeated_plasticity_analysis(n_repeats, transfer_learning, **kwargs):
     n_sigmas = kwargs['sigmas'].shape[0]

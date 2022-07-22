@@ -142,7 +142,6 @@ def find_argmin_in_matrix(mat):
     Find the row and coloumn of the smallest element in a matrix
     '''
     nr, nc = mat.shape
-    print('I love Phanis <3')
     return int(np.argmin(mat)/nc), np.argmin(mat) - int(np.argmin(mat)/nc) * nc
 
 
@@ -203,7 +202,6 @@ def generate_locations(length, width, n):
 
     return xs, ys
 
-# computes the entropy of a tensor
 def calc_entropy(x:torch.Tensor):
     '''
     Computes the (Shannon) entropy of a tensor based on its empirical distribution
