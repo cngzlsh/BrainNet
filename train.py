@@ -139,7 +139,7 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
                 hrs, mins, secs = elapsed_time(start, epoch_end)
                 print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
             else:
-                if epoch % 20 == 0:
+                if epoch % 50 == 0:
                     hrs, mins, secs = elapsed_time(start, epoch_end)
                     print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
@@ -354,7 +354,7 @@ def learning_with_plasticity(sigma, alpha=1, transfer_learning=True, **kwargs):
     train_dataset, test_dataset = BNN_Dataset(X_train, _Y_train), BNN_Dataset(X_test, _Y_test)
     train_dataloader, test_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DataLoader(test_dataset, batch_size=batch_size, shuffle=True) 
     
-    # load trained DNN
+    # load trained 
     if transfer_learning:
         DNN.load_state_dict(DNN_params)
     else:
@@ -376,7 +376,10 @@ def learning_with_plasticity(sigma, alpha=1, transfer_learning=True, **kwargs):
             train_loader=train_dataloader, test_loader=test_dataloader,
             optimiser=optimiser, criterion=criterion, num_epochs=num_epochs,
             verbose=verbose, force_stop=False, return_init_eval_loss=True)
-        
+
+    if init_eval_loss == torch.Tensor([float('inf')]):
+            raise ValueError('Loss exploded')
+
     return torch.Tensor(train_losses), torch.Tensor(eval_losses), torch.Tensor([init_eval_loss])
 
 
@@ -406,7 +409,7 @@ def plasticity_analysis(transfer_learning, **kwargs):
     
     for i, sigma in enumerate(sigmas):
         if verbose >= 1:
-            print(f'Processing simga={sigma} ({i+1}/{n_sigmas})')
+            print(f'Processing sigma={sigma} ({i+1}/{n_sigmas})')
             
         sigma_train_losses, sigma_eval_losses, sigma_init_eval_loss = learning_with_plasticity(
             sigma, alpha=1, 

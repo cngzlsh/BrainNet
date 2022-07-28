@@ -1,3 +1,4 @@
+from random import gauss
 from approx_bnns import *
 from bvc import *
 from utils import *
@@ -15,7 +16,7 @@ def normalise_data(data):
     '''
     Normalises data: subtract mean and divide by std over batch_size dim (dim 0)
     '''
-    return torch.nan_to_num((data - torch.mean(data, dim=0))/ torch.std(data, dim=0))
+    return torch.nan_to_num((data - torch.mean(data, dim=0))/ torch.std(data, dim=0), nan=0.0, posinf=0.0, neginf=0.0)
 
 def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, time_steps=False, gaussian_noise=False):
     """
@@ -49,7 +50,7 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
         raise ValueError('Temporal must be a time length of integer')
 
     Y = BNN(X)
-    Y = normalise_data(Y)
+    # Y = normalise_data(Y)
 
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
@@ -58,7 +59,7 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
     return X.cpu(), Y.cpu()
 
 
-def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False, normalisation=None):
+def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False):
     '''
     A simple, approximately biological input pattern: {input_dim} input neurons into the approximate neuronal network,
     the input is the number of spikes in a very small time bin. The number of spikes for each presynaptic neuron follows
@@ -86,12 +87,10 @@ def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq,
         mu, sigma = gaussian_noise
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
-    if normalisation == 'Lp':
-        Y = F.normalize(Y)
-    elif normalisation == 'Z':
-        Y = normalise_data(Y)
+    Y = normalise_data(Y)
 
     return X.cpu(), Y.cpu()
+
 
 def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
     '''
@@ -113,7 +112,7 @@ def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
     return bin_counts.float()
 
 
-def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False, normalisation=None):
+def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
     '''
     Generates time series of patterns
     '''
@@ -125,19 +124,16 @@ def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, al
 
     Y = BNN(X)
 
+    Y = normalise_data(Y)
+    
     if gaussian_noise is not False:
         mu, sigma = gaussian_noise
         Y += dist.Normal(loc=mu, scale=sigma).sample(sample_shape=Y.shape).to(device)[:,:,0]
 
-    if normalisation == 'Lp':
-        Y = F.normalize(Y)
-    elif normalisation == 'Z':
-        Y = normalise_data(Y)
-    
     return X.cpu(), Y.cpu()
 
 
-def apply_plasticity_and_generate_new_output(sigma, alpha=1, normalisation=None, **kwargs):
+def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
     '''
     Slightly alter each non-zero weight in the biological neural network, and generate new output patterns
     '''
@@ -158,17 +154,18 @@ def apply_plasticity_and_generate_new_output(sigma, alpha=1, normalisation=None,
     if verbose:
         print('\t Plasticity applied.')
     
-    if normalisation == 'Lp':
-        _Y_train = F.normalize(_Y_train)
-        _Y_test = F.normalize(_Y_test)
-    elif normalisation == 'Z':
-        _Y_train = normalise_data(BNN(X_train.to(device)))
-        _Y_test = normalise_data(BNN(X_test.to(device)))
+    _Y_train = BNN(X_train.to(device))
+    _Y_test = BNN(X_test.to(device))
+
+    new_Y_train = normalise_data(_Y_train)
+    new_Y_test = normalise_data(_Y_test)
     
     if verbose:
         print('\t New output patterns generated.')
+    if torch.max(new_Y_train > 1e30):
+        raise ValueError('Normalised to nan')
 
-    return _Y_train, _Y_test
+    return new_Y_train, new_Y_test
 
 
 if __name__ == '__main__':
@@ -216,7 +213,7 @@ if __name__ == '__main__':
         # mean_freq=mean_freq,
         time_steps=time_steps,
         gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'complex_train.pkl')
+    save_data(X_train, Y_train, './data/', f'complex_train_nonoise.pkl')
 
     X_test, Y_test = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
@@ -227,7 +224,7 @@ if __name__ == '__main__':
         # mean_freq=mean_freq,
         time_steps=time_steps, 
         gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'complex_test.pkl')
+    save_data(X_test, Y_test, './data/', f'complex_test_nonoise.pkl')
 
     X_valid, Y_valid = generate_time_dependent_stochastic_pattern(
         BNN=approx_bnn, 
@@ -238,6 +235,4 @@ if __name__ == '__main__':
         # mean_freq=mean_freq,
         time_steps=time_steps, 
         gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'complex_valid.pkl')
-
-    # Y_train_s, _ = apply_plasticity_and_generate_new_output(approx_bnn, (BNN_weights, BNN_non_linearities), X_train, X_test, sigma=0.0002, alpha=1, verbose=True)
+    save_data(X_valid, Y_valid, './data/', f'complex_valid_nonoise.pkl')
