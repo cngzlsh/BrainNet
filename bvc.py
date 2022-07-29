@@ -56,6 +56,32 @@ class RectangleEnvironment:
             distances[:, :, bearing] += torch.multiply(segment_in_bottom_mask, y/torch.cos(b - torch.pi))
             distances[:, :, bearing] += torch.multiply(segment_in_left_mask, x/torch.cos(b- 3/2 * torch.pi))
         
+        if n_mesh_x == 1 and n_mesh_y == 1:
+            # autoshape
+            return distances[0,0,:], bearings, angles
+        else:   
+            return distances, bearings, angles
+    
+    def random_sample_locations(self, n_data_points, n_disc=360):
+        '''
+        Randomly sample n locations in the environment, returns distances, bearings and angles
+        
+        :returns:
+        distances: torch.Tensor shape(n_data_points, n_disc)
+        bearing:   torch.Tensor shape(n_data_points, n_disc), discretising (0, 360)
+        angles:    torch.Tensor shape(n_data_points, n_disc), one degrees in radian
+        '''
+        distances, bearings, angles = torch.zeros(n_data_points, n_disc), torch.zeros(n_data_points, n_disc), torch.zeros(n_data_points, n_disc)
+        xs = dist.Uniform(low=0, high=self.l).sample(sample_shape=torch.Size([n_data_points]))
+        ys = dist.Uniform(low=0, high=self.w).sample(sample_shape=torch.Size([n_data_points]))
+        for i, loc in enumerate(zip(xs, ys)):
+            print(i, end='\r')
+            distance, bearing, angle = self.compute_wall_dist(loc, n_disc=n_disc)
+            
+            distances[i, :] = distance
+            bearings[i, :] = bearing
+            angles[i, :] = angle
+            
         return distances, bearings, angles
     
     def visualise_bvc_firing_rates(self, bvcs, n=100):
@@ -81,7 +107,7 @@ class RectangleEnvironment:
         plt.show()
         
         
-    def visualise_pc_firing_rates(self, pcs, n=100):
+    def visualise_pc_firing_rates(self, pcs, n=100, cb=True):
         '''
         Visualises firing rate of PC(s)
         '''
@@ -101,14 +127,15 @@ class RectangleEnvironment:
             plt.subplot(1, n_pcs, i+1)
             plt.scatter(x, y, c=firing_rates[i])
             plt.title(f'Place cell {i+1}/{n_pcs}')
+            if cb:
+                plt.colorbar()
         plt.show()
         
-
 class BoundaryVectorCell:
     '''
     A boundary vector cell initiliased with preferred distance (mm) and angle (rad)
     '''
-    def __init__(self, d, phi, sigma_zero=122, beta=1830, sigma_ang=0.2, multiplier=10000, maxfire=5) -> None:
+    def __init__(self, d, phi, sigma_zero=600, beta=1830, sigma_ang=0.2, multiplier=1, maxfire=False) -> None:
         self.d = torch.Tensor([d])
         self.phi = torch.Tensor([phi])
         self.sigma_zero = sigma_zero                                                 # Hartley 2000: sigZero = 122 mm
@@ -141,8 +168,8 @@ class BoundaryVectorCell:
         The firing rate is found by integrating to find the net contribution of all the environment's boundaries
         '''
         n_disc = distances.shape[-1]
-        
-        unscaled_firing_rates = torch.stack([self.compute_BVC_firing_single_segment(distances[:,:,i], bearings[i]) for i in range(n_disc)], dim=-1)
+            
+        unscaled_firing_rates = torch.stack([self.compute_BVC_firing_single_segment(distances[... ,i], bearings[..., i]) for i in range(n_disc)], dim=-1)
         firing_rates = self.multiplier * torch.sum(torch.multiply(unscaled_firing_rates, angles), dim=-1)
         
         if self.maxfire is not False:
@@ -157,7 +184,7 @@ class PlaceCell:
     The firing F_j(x) of PC j at location x is proportional to the thresholded, weighted sum of the N BVC sets that connect to it
     Output is the thresholded firing sum, each at the same allocentric reference frame, scaled by a coefficient A
     '''
-    def __init__(self, bvcs=False, connection_weights=False, non_linearity=nn.ReLU(), A=5000, T=12, max_fire=100):
+    def __init__(self, bvcs=False, connection_weights=False, non_linearity=nn.ReLU(), A=10000, T=False, max_fire=False):
         
         if bvcs is not False:
             self.bvcs = bvcs
@@ -172,9 +199,11 @@ class PlaceCell:
     
     def create_random_bvcs(self, n_bvcs, max_r=1000):
         self.n_bvcs = n_bvcs
-        rs = dist.Uniform(low=0, high=1000).sample(sample_shape=torch.Size([n_bvcs]))
-        phis = dist.Uniform(low=0, high=2*torch.pi).sample(sample_shape=torch.Size([n_bvcs]))
-        self.bvcs = [BoundaryVectorCell(ds[i], phis[i]) for i in range(n_bvcs)]
+        
+        rs = dist.Uniform(low=0, high=max_r).sample(sample_shape=torch.Size([n_bvcs]))
+        phis = dist.Uniform(0, 2*torch.pi).sample(sample_shape=torch.Size([n_bvcs]))
+        
+        self.bvcs = [BoundaryVectorCell(rs[i], phis[i]) for i in range(n_bvcs)]
         self.connection_weights = torch.ones(n_bvcs)
         
     def compute_PC_firing(self, distances, bearings, subtended_angles):
@@ -185,7 +214,13 @@ class PlaceCell:
             
         bvc_firing_rates = torch.stack([bvc.compute_BVC_firing(distances, bearings, subtended_angles) for bvc in self.bvcs], dim=-1)
         weighted_sum = torch.sum(torch.mul(bvc_firing_rates, self.connection_weights), dim=-1)
-        thresholded_sum = self.A * weighted_sum - self.T
+        
+        thresholded_sum = self.A * weighted_sum
+        
+        if self.T == False:
+            self.T = 0.9 * torch.max(thresholded_sum)
+            
+        thresholded_sum = thresholded_sum - self.T
         
         if self.max_fire is False:
             return self.non_linearity(thresholded_sum)
@@ -203,3 +238,31 @@ class PlaceCell:
         dW = [D * BVC_firings[i] *Phi(PC_firing, xi) for i in range(self.n_bvcs)]
         
         return dW
+
+class BVC_PC_network:
+    def __init__(self, BVCs:list, n_PCs:int, n_BVCs_per_PC:int, connection_indices=False):
+        self.BVCs = BVCs
+        self.n_BVCs = len(BVCs)
+        self.n_PCs = n_PCs
+        self.n_BVCs_per_PC = n_BVCs_per_PC
+        
+        if not connection_indices: # randomly connect BVCs to PCs
+            connection_indices = [random.sample(range(100),self.n_BVCs_per_PC) for PC_idx in range(self.n_PCs)]
+        
+        self.PCs = [PlaceCell(bvcs=[self.BVCs[i] for i in connection_indices[pc_idx]], 
+                                    connection_weights=torch.ones(self.n_BVCs_per_PC)) for pc_idx in range(self.n_PCs)]
+    
+    def compute_population_firing(self, distances, bearings, subtended_angles):
+        
+        n_locs = distances.shape[0]
+        
+        BVCs_population_firing = torch.zeros(n_locs, self.n_BVCs)
+        PCs_population_firing = torch.zeros(n_locs, self.n_PCs)
+        
+        for BVC_idx in range(self.n_BVCs):
+            BVCs_population_firing[:, BVC_idx] = self.BVCs[BVC_idx].compute_BVC_firing(distances, bearings, subtended_angles)
+        
+        for PC_idx in range(self.n_PCs):
+            PCs_population_firing[:, PC_idx] = self.PCs[PC_idx].compute_PC_firing(distances, bearings, subtended_angles)
+        
+        return BVCs_population_firing, PCs_population_firing

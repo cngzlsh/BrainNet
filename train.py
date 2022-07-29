@@ -55,7 +55,7 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
                 hrs, mins, secs = elapsed_time(start, epoch_end)
                 print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
             else:
-                if epoch % 20 == 0:
+                if epoch % 50 == 0:
                     hrs, mins, secs = elapsed_time(start, epoch_end)
                     print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
@@ -70,7 +70,7 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     if return_init_eval_loss:
         return train_losses, eval_losses, init_eval_loss
     else:
-        return train_losses, eval_losses,
+        return train_losses, eval_losses
 
 
 def eval(model, test_loader, criterion):
