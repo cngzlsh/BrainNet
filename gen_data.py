@@ -61,9 +61,7 @@ def generate_binary_firing_pattern(BNN, input_dim, n_data_points, firing_prob, t
 
 def generate_stochastic_firing_pattern(BNN, input_dim, n_data_points, mean_freq, gaussian_noise=False):
     '''
-    A simple, approximately biological input pattern: {input_dim} input neurons into the approximate neuronal network,
-    the input is the number of spikes in a very small time bin. The number of spikes for each presynaptic neuron follows
-    independent Poisson distribution.
+    Poisson neuron firing model.
 
     :param model:               Mapproximate biological network
     :param input_dim:           input dimension
@@ -112,18 +110,23 @@ def gen_multiple_spike_train_counts(alpha, beta, time_steps=50):
     return bin_counts.float()
 
 
-def generate_time_dependent_stochastic_pattern(BNN, input_dim, n_data_points, alphas, betas, time_steps=50, gaussian_noise=False):
+def generate_renewal_process_input_pattern(n_data_points, input_dim, alphas, betas, time_steps=50):
     '''
-    Generates time series of patterns
+    Renewal process neuron firing model.
     '''
     if isinstance(alphas, int) or isinstance(alphas, float):
         alphas = torch.Tensor(torch.ones(input_dim) * alphas)
         betas = torch.Tensor(torch.ones(input_dim) * betas)
 
-    X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas, time_steps=time_steps) for _ in range( n_data_points)]).to(device)
+    X = torch.stack([gen_multiple_spike_train_counts(alpha=alphas, beta=betas, time_steps=time_steps) for _ in range( n_data_points)])
 
+    return X
+
+
+def generate_output_pattern(BNN, X, gaussian_noise=False):
+
+    X = X.to(device)
     Y = BNN(X)
-
     Y = normalise_data(Y)
     
     if gaussian_noise is not False:
@@ -148,7 +151,6 @@ def apply_plasticity_and_generate_new_output(sigma, alpha=1, **kwargs):
     # initialise BNN
     BNN.load_state_dict(BNN_params[0])
     BNN.load_non_linearities(BNN_params[1])
-
     BNN.gaussian_plasticity_update(sigma, alpha)
     
     if verbose:
@@ -190,6 +192,12 @@ if __name__ == '__main__':
     time_steps = 50
     transfer_functions=[nn.ReLU(), nn.ELU(), nn.SiLU(), nn.CELU(), nn.Tanh(), nn.Sigmoid(), nn.LeakyReLU(0.1), nn.LeakyReLU(0.2), nn.LeakyReLU(0.3)]
 
+
+    X_train = generate_renewal_process_input_pattern(num_train, input_dim, alphas, betas, time_steps)
+    X_test = generate_renewal_process_input_pattern(num_test, input_dim, alphas, betas, time_steps)
+    X_valid = generate_renewal_process_input_pattern(num_valid, input_dim, alphas, betas, time_steps)
+
+
     approx_bnn = ComplexApproximateBNN(
         x=x, y=y, z=z,
         input_dim=input_dim,
@@ -200,39 +208,24 @@ if __name__ == '__main__':
         ).to(device)
 
 
-    torch.save(approx_bnn.state_dict(), './approx_bnn_params/complex.pt')
-    save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
+    # torch.save(approx_bnn.state_dict(), './approx_bnn_params/feedforward.pt')
+    # save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
 
 
-    X_train, Y_train = generate_time_dependent_stochastic_pattern(
+    X_train, Y_train = generate_output_pattern(
         BNN=approx_bnn, 
-        input_dim=input_dim, 
-        n_data_points=num_train, 
-        alphas=alphas, 
-        betas=betas, 
-        # mean_freq=mean_freq,
-        time_steps=time_steps,
+        X=X_train,
         gaussian_noise=False)
     save_data(X_train, Y_train, './data/', f'complex_train_nonoise.pkl')
 
-    X_test, Y_test = generate_time_dependent_stochastic_pattern(
+    X_test, Y_test = generate_output_pattern(
         BNN=approx_bnn, 
-        input_dim=input_dim,
-        n_data_points=num_test, 
-        alphas=alphas, 
-        betas=betas, 
-        # mean_freq=mean_freq,
-        time_steps=time_steps, 
+        X=X_test,
         gaussian_noise=False)
     save_data(X_test, Y_test, './data/', f'complex_test_nonoise.pkl')
 
-    X_valid, Y_valid = generate_time_dependent_stochastic_pattern(
+    X_valid, Y_valid = generate_output_pattern(
         BNN=approx_bnn, 
-        input_dim=input_dim, 
-        n_data_points=num_valid, 
-        alphas=alphas, 
-        betas=betas, 
-        # mean_freq=mean_freq,
-        time_steps=time_steps, 
+        X=X_test,
         gaussian_noise=False)
     save_data(X_valid, Y_valid, './data/', f'complex_valid_nonoise.pkl')

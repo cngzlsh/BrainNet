@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.distributions as dist
 import torch.nn.functional as F
 import random
-import copy
 
 seed = 1234
 torch.manual_seed(seed)
@@ -90,7 +89,9 @@ class FeedForwardApproximateBNN(nn.Module):
         apply_connectivity()
 
     def forward(self, input_pattern):
-        return self.layers(input_pattern)
+        n_data, ts, input_dim = input_pattern.shape
+        input_pattern = input_pattern.view(-1, input_dim)
+        return self.layers(input_pattern).view(n_data, ts, -1)
 
 
 class ResidualApproximateBNN(nn.Module):
@@ -164,12 +165,16 @@ class ResidualApproximateBNN(nn.Module):
 
         apply_connectivity()
 
-    def forward(self, x):
-        x = self.input_layer(x)
-        x = self.input_activation(x)
+    def forward(self, input_pattern): 
+        n_data, ts, input_dim = input_pattern.shape
+        input_pattern = input_pattern.view(-1, input_dim)
+
+
+        input_pattern = self.input_layer(input_pattern)
+        input_pattern = self.input_activation(input_pattern)
 
         temp_outputs = [None] * (self.z + 1)
-        temp_outputs[0] = x
+        temp_outputs[0] = input_pattern
 
         for hidden_idx in range(self.z):
 
@@ -188,7 +193,7 @@ class ResidualApproximateBNN(nn.Module):
         out = self.output_layer(temp_outputs[-1])
         out = self.output_activation(out)
         
-        return out
+        return out.view(n_data, ts, -1)
 
 
 class RecurrentApproximateBNN(nn.Module):
