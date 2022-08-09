@@ -80,3 +80,6 @@ class RecurrentDNN(nn.Module):
     
         out = self.output_layer(x)
         return out, (h_curr, c_curr)
+
+if __name__ == '__main__':
+    assert False

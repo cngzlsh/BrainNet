@@ -176,7 +176,7 @@ def eval_rnn(model, test_loader, criterion, save_Y_hat=False):
 
         for _, (X, Y) in enumerate(iter(test_loader)):
             
-            Y_hat, c_prev = model(X, rec_prev)
+            Y_hat, rec_prev = model(X, rec_prev)
             
             if save_Y_hat:
                 Y_hats.append(Y_hat)
@@ -196,6 +196,12 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
     valid_loader = kwargs['valid_loader']
     test_loader = kwargs['test_loader']
     n_epochs = kwargs['n_epochs']
+    try:
+        input_dim = kwargs['input_dim']
+        output_dim = kwargs['output_dim']
+    except:
+        input_dim = 16
+        output_dim = 16
 
     final_eval_loss = np.zeros((len(hidden_dims), len(n_layerss)))
 
@@ -204,7 +210,7 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
 
             # deep learning model
             if _type == 'FF':
-                DNN = FeedForwardDNN(input_dim=16, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=16).to(device)
+                DNN = FeedForwardDNN(input_dim=input_dim, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=output_dim).to(device)
 
                 # training parameters
                 optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
@@ -268,6 +274,7 @@ def train_varying_data_efficiency(hidden_dim, n_layers, verbose=True, **kwargs):
     n_datas = kwargs['n_datas']
     n_epochs = kwargs['n_epochs']
     batch_size = kwargs['batch_size']
+    _type = kwargs['type']
     
     for i, n_data in enumerate(n_datas):
         if verbose:
@@ -275,15 +282,30 @@ def train_varying_data_efficiency(hidden_dim, n_layers, verbose=True, **kwargs):
             
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=RandomSampler(train_dataset, replacement=False, num_samples=n_data))
         
-        DNN = FeedForwardDNN(input_dim=input_dim, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=output_dim).to(device)
+        if _type == 'MLP':
+            DNN = FeedForwardDNN(input_dim=input_dim, hidden_dim=hidden_dim, n_layers=n_layers, output_dim=output_dim).to(device)
+        elif _type == 'RNN':
+            DNN = RecurrentDNN(input_dim=input_dim, hidden_dim=hidden_dim, n_linear_layers=n_layers, output_dim=output_dim, n_lstm_layers=1).to(device)
+        else:
+            raise ValueError('Specify DNN type (MLP or RNN)')
+
         optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
         criterion = nn.MSELoss()
         
-        _, eval_losses = train(
-            model=DNN,
-            train_loader=train_dataloader, test_loader=test_dataloader,
-            optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
-            verbose=False, force_stop=False)
+        if isinstance(DNN, FeedForwardDNN):
+            _, eval_losses = train(
+                model=DNN,
+                train_loader=train_dataloader, test_loader=test_dataloader,
+                optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+                verbose=False, force_stop=False)
+        
+        if isinstance(DNN, RecurrentDNN):
+            _, eval_losses = train_rnn(
+                model=DNN,
+                train_loader=train_dataloader, test_loader=test_dataloader,
+                optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
+                verbose=False, force_stop=False)
+
         final_eval_losses.append(eval_losses[-1])
         
     return torch.Tensor([final_eval_losses])
@@ -343,16 +365,9 @@ def learning_with_plasticity(sigma, alpha=1, transfer_learning=True, **kwargs):
     
     _Y_train, _Y_test = apply_plasticity_and_generate_new_output(sigma, alpha, **kwargs)
     
-    if isinstance(DNN, FeedForwardDNN):
-        # For feedforward MLP, merge first two dimensions
-        X_train = X_train.view(-1, 16)
-        _Y_train = _Y_train.view(-1, 16)
-        X_test = X_test.view(-1, 16)
-        _Y_test = _Y_test.view(-1, 16)
-    
     # prepare dataloader
     train_dataset, test_dataset = BNN_Dataset(X_train, _Y_train), BNN_Dataset(X_test, _Y_test)
-    train_dataloader, test_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DataLoader(test_dataset, batch_size=batch_size, shuffle=True) 
+    train_dataloader, test_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False), DataLoader(test_dataset, batch_size=batch_size, shuffle=False) 
     
     # load trained 
     if transfer_learning:
@@ -445,44 +460,3 @@ def repeated_plasticity_analysis(n_repeats, transfer_learning, **kwargs):
     stds = (torch.std(train_losses_by_sigma_tensor, 0), torch.std(eval_losses_by_sigma_tensor, 0), torch.std(init_losses_by_sigma_tensor, 0))
         
     return means, stds
-
-
-
-
-if __name__ == '__main__':
-    
-    X_train, Y_train = load_data('./data/', 'abnn_recur_train_256_0.5_4_0.5.pkl')
-    X_test, Y_test = load_data('./data/', 'abnn_recur_test_256_0.5_4_0.5.pkl')
-    X_valid, Y_valid = load_data('./data/', 'abnn_recur_valid_256_0.5_4_0.5.pkl')
-
-    batch_size = 200   # number of data points in each mini-batch
-    n_train = 10000    # number of data used, from 1 to len(X_train)
-    n_epochs = 50      # number of training epochs
-
-    train_dataset = BNN_Dataset(X_train[:n_train], Y_train[:n_train])
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    test_dataset = BNN_Dataset(X_test, Y_test)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-
-    valid_dataset = BNN_Dataset(X_valid, Y_valid)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
-
-    # deep learning model
-    DNN = RecurrentDNN(input_dim=16, hidden_dim=256, n_linear_layers=1, output_dim=16, n_lstm_layers=1).to(device)
-
-    # training parameters
-    optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-    criterion = nn.MSELoss()
-
-    train_losses, eval_losses = train_rnn(
-        model=DNN,
-        train_loader=train_dataloader, test_loader=test_dataloader,
-        optimiser=optimiser, criterion=criterion, num_epochs=n_epochs,
-        verbose=True, force_stop=False)
-    
-    _, Y_test_hat = eval_rnn(DNN, test_dataloader, criterion, save_Y_hat=True)
-
-    plot_loss_curves(train_losses, eval_losses, loss_func='MSE Loss')
-
-

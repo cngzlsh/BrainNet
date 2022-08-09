@@ -124,7 +124,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     '''
     n_epochs = len(train_losses)
     
-    plt.figure(figsize=(12,6))
+    plt.figure(figsize=(12,4))
     plt.plot(train_losses)
     plt.plot(eval_losses)
 

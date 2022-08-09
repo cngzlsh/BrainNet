@@ -11,6 +11,13 @@ random.seed(seed)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+def normalise_data(data):
+    '''
+    Normalises data: subtract mean and divide by std over batch_size dim (dim 0)
+    '''
+    return torch.nan_to_num((data - torch.mean(data, dim=0))/ torch.std(data, dim=0), nan=0.0, posinf=0.0, neginf=0.0)
+
+
 class RandomActivation(nn.Module):
     '''
     Custom non-linearity layer, applies a random non-linearity for each dimension
@@ -270,20 +277,19 @@ class RecurrentApproximateBNN(nn.Module):
         Pass a temporal sequence through RNN. input is of shape (batch_size, num_time_steps, input_dim)
         '''
         batch_size, time_steps, _ = x.shape
-
         # initialise recurrent state and output tensor
         self.recurrent_state = torch.zeros(batch_size, self.recurrent_dim).to(device)
         y = torch.zeros([batch_size, time_steps, self.output_dim]).to(device)
 
         for t in range(time_steps):
-            
+
             temp = self.input_layer(x[:,t,:]) # (batch_size, hidden_dim)
             temp = self.input_activation(temp) # (batch_size, hidden_dim)
 
             temp = torch.concat((temp, self.recurrent_state), dim=-1) # (batch_size, hidden_dim + recurrent_dim)
             temp = self.hidden_layers(temp)      # (batch_size, hidden_dim)
-
-            self.recurrent_state = F.normalize(temp)
+            
+            self.recurrent_state = normalise_data(temp)
 
             yt = self.output_layer(temp)         # (batch_size, output_dim)
             y[:,t,:] = self.output_activation(yt)
@@ -464,7 +470,7 @@ class ComplexApproximateBNN(nn.Module):
                 if hidden_idx == 1: # second hidden layer receives lateral inhibition
                     temp = torch.concat((temp_outputs[1], self.lateral_inhibition_state), dim=-1)
                     temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](self.hidden_layers[1](temp))
-                    self.lateral_inhibition_state = F.normalize(temp_outputs[hidden_idx+1])
+                    self.lateral_inhibition_state = normalise_data(temp_outputs[hidden_idx+1])
 
                 if hidden_idx not in set([0,1]):
                     if self.residual_in[hidden_idx]:
@@ -479,7 +485,7 @@ class ComplexApproximateBNN(nn.Module):
                         temp_outputs[hidden_idx+1] = self.hidden_layers[hidden_idx](temp_input)
                         temp_outputs[hidden_idx+1] = self.activations[hidden_idx+1](temp_outputs[hidden_idx+1])
 
-            self.backprojection_state = F.normalize(temp_outputs[-1])
+            self.backprojection_state = normalise_data(temp_outputs[-1])
             
             y[:,t,:] = self.output_activation(self.output_layer(temp_outputs[-1]))
 

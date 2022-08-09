@@ -1,4 +1,3 @@
-from random import gauss
 from approx_bnns import *
 from bvc import *
 from utils import *
@@ -183,7 +182,7 @@ if __name__ == '__main__':
     output_dim = 16
     num_train = 10000
     num_test = 1000
-    num_valid = 4000
+    num_valid = 1000
     mean_freq = 5
 
     alphas = torch.ones(input_dim) * 2
@@ -208,24 +207,24 @@ if __name__ == '__main__':
         ).to(device)
 
 
-    # torch.save(approx_bnn.state_dict(), './approx_bnn_params/feedforward.pt')
-    # save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
+    torch.save(approx_bnn.state_dict(), './approx_bnn_params/complex.pt')
+    save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
 
 
     X_train, Y_train = generate_output_pattern(
         BNN=approx_bnn, 
         X=X_train,
-        gaussian_noise=False)
-    save_data(X_train, Y_train, './data/', f'complex_train_nonoise.pkl')
+        gaussian_noise=gaussian_noise)
+    save_data(X_train, Y_train, './data/', f'complex_train.pkl')
 
     X_test, Y_test = generate_output_pattern(
         BNN=approx_bnn, 
         X=X_test,
-        gaussian_noise=False)
-    save_data(X_test, Y_test, './data/', f'complex_test_nonoise.pkl')
+        gaussian_noise=gaussian_noise)
+    save_data(X_test, Y_test, './data/', f'complex_test.pkl')
 
     X_valid, Y_valid = generate_output_pattern(
         BNN=approx_bnn, 
-        X=X_test,
-        gaussian_noise=False)
-    save_data(X_valid, Y_valid, './data/', f'complex_valid_nonoise.pkl')
+        X=X_valid,
+        gaussian_noise=gaussian_noise)
+    save_data(X_valid, Y_valid, './data/', f'complex_valid.pkl')
