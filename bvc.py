@@ -2,9 +2,13 @@ import torch
 import torch.nn as nn
 import torch.distributions as dist
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import random
 from utils import *
+from tqdm import tqdm
 
 torch.manual_seed(1234)
+random.seed(1234)
 
 class RectangleEnvironment:
     '''
@@ -26,7 +30,13 @@ class RectangleEnvironment:
         x_end, y_end = end_loc
         assert x_start >= 0 and x_end <= self.l
         assert y_start >= 0 and y_end <= self.w
-        self.barriers.append(torch.Tensor([[x_start + 1e-3, y_start + 1e-3], [x_end, y_end]]))
+        self.barriers.append(torch.Tensor([[x_start + 1e-4, y_start + 1e-4], [x_end, y_end]]))
+        
+    def remove_all_barriers(self):
+        '''
+        Removes all barriers in the environment.
+        '''
+        self.barriers = []
         
     def compute_wall_dist(self, loc, n_disc=360):
         '''
@@ -54,7 +64,8 @@ class RectangleEnvironment:
         top_left = 3/2*torch.pi + torch.arctan((self.w-y)/x)
 
         for bearing in range(n_disc):
-            b = torch.Tensor([2 * torch.pi/n_disc * bearing]) + 1e-3 # bearing in rad
+            b = torch.Tensor([2 * torch.pi/n_disc * bearing])
+            # bearing in rad
 
             segment_in_top_mask = torch.logical_or(b >= top_left, b < top_right)
             segment_in_right_mask = torch.logical_and(b >= top_right, b < bottom_right)
@@ -71,7 +82,7 @@ class RectangleEnvironment:
             if len(self.barriers) > 0:
                 
                 for barrier in self.barriers: # has barrier
-                    m1 = 1/torch.tan(b + 1e-3) # (n_mesh_x, n_mesh_y)
+                    m1 = 1/(torch.tan(b)+1e-3) # (n_mesh_x, n_mesh_y)
                     c1 = y - m1 * x # (n_mesh_x, n_mesh_y)
                     
                     m2 = (barrier[1,1] - barrier[0,1]) / (barrier[1,0] - barrier[0,0]) # m = (y1 - y0) / (x1 - x0)
@@ -89,7 +100,15 @@ class RectangleEnvironment:
                     intersec_x, intersec_y = intersec_loc[:,:,0,0], intersec_loc[:,:,1,0] # (n_mesh_X, n_mesh_y)
                     
                     vec_to_bearing = intersec_loc - torch.stack(loc, dim=-1)[..., None] # vector to bearing
-                    barrier_in_direction = torch.sign(vec_to_bearing[:,:,0,0]) == torch.sign(torch.sin(b)) # filter out barriers in negative directions
+                    
+                    barrier_in_direction = torch.logical_and(
+                        torch.logical_and(
+                            torch.logical_xor(intersec_x <= barrier[0,0], intersec_x <= barrier[1,0]),
+                            torch.logical_xor(intersec_y <= barrier[0,1], intersec_y <= barrier[1,1])),
+                        torch.sign(vec_to_bearing[:,:,0,0]) == torch.sign(torch.sin(b))) # filter out barriers in negative directions
+                    
+                    # if bearing == 180:
+                    #     assert False
                     
                     dist_to_barrier = torch.sqrt(torch.pow(vec_to_bearing[:,:,0,0], 2) + torch.pow(vec_to_bearing[:,:,1,0], 2)) # distances to barrier
                     dist_to_barrier = torch.nan_to_num(torch.multiply(1/barrier_in_direction, dist_to_barrier),float('inf'))
@@ -102,22 +121,7 @@ class RectangleEnvironment:
             return distances[0,0,:], bearings, angles
         else:   
             return distances, bearings, angles
-
-    def plot_environment(self):
-        '''
-        Visualise the environment with all barriers
-        '''
-        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio))
-        background = patches.Rectangle((0, 0), self.w, self.l, facecolor='lightgrey', zorder=-1, edgecolor='grey', linewidth=3)
-        ax.add_patch(background)
         
-        for barrier in self.barriers:
-            ax.plot([barrier[0,0], barrier[1,0]], [barrier[0,1], barrier[1,1]], color='grey', linewidth=3) 
-        
-        ax.axis('off')
-        ax.set_aspect('equal')
-        ax.grid(False)
-        plt.show()
         
     def generate_mesh(self, n_disc=101):
         '''
@@ -162,13 +166,15 @@ class RectangleEnvironment:
         mesh_x, mesh_y, n_neurons = firing_rates.shape
         
         x, y = torch.meshgrid(
-            torch.linspace(1e-3, self.l.item()-1e-3, mesh_x),
-            torch.linspace(1e-3, self.w.item()-1e-3, mesh_y))
+            torch.linspace(0, self.l.item(), mesh_x),
+            torch.linspace(0, self.w.item(), mesh_y))
         
         plt.figure(figsize=(6*n_neurons, 6/self.aspect_ratio))
         for neuron_idx in range(n_neurons):
             plt.subplot(1, n_neurons, neuron_idx+1)
             plt.scatter(x, y, c = firing_rates[:, :, neuron_idx])
+            plt.xticks([])
+            plt.yticks([])
             if cb:
                 plt.colorbar()
                 
@@ -193,7 +199,61 @@ class RectangleEnvironment:
         
         if return_firing_rates:
             return firing_rates
+    
+    def plot_environment(self):
+        '''
+        Visualise the environment with all barriers
+        '''
+        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio))
+        background = patches.Rectangle((0, 0), self.l, self.w, edgecolor='grey', facecolor='lightgrey', zorder=-1, fill=True, lw=5)
+        ax.add_patch(background)
         
+        if self.barriers is not []:
+            for barrier in self.barriers:
+                ax.plot([barrier[0,0], barrier[1,0]], [barrier[0,1], barrier[1,1]], color='grey', linewidth=3) 
+        plt.xlim([-1, self.l+1])
+        plt.ylim([-1, self.w+1])
+        ax.axis('off')
+        ax.set_aspect('equal')
+        ax.grid(False)
+        plt.show()
+
+
+class CircleEnvironment:
+    '''
+    Circular environment to obtain BVC and PC firing rates
+    '''
+    def __init__(self, radius):
+        self.radius = torch.Tensor([radius])
+    
+    def compute_wall_dist(self, loc, n_disc=360):
+        x, y = loc
+        x = torch.Tensor([x]) if not isinstance(x, torch.Tensor) else x
+        y = torch.Tensor([y]) if not isinstance(y, torch.Tensor) else y
+        assert torch.any(torch.pow(x, 2) + torch.pow(y, 2)) < torch.any(torch.pow(self.radius, 2)), 'location not in environment'
+        try:
+            n_mesh_x, n_mesh_y = x.shape
+        except:
+            n_mesh_x, n_mesh_y = 1, 1
+        
+        angle3 = torch.arctan(x/y) # [n_mesh_x, n_mesh_y]
+        dist_to_centre = torch.pow(x, 2) + torch.pow(y, 2)
+        
+        pass
+        
+    def generate_mesh(self, n_disc=101):
+        pass
+    
+    def random_sample_locations(self, n_data_points, n_disc=360):
+        pass
+    
+    def visualise_firing_rates(self, firing_rates, cb=False):
+        pass
+        
+    def visualise_cell_firing_field(self, neurons, n_disc=101):
+        pass
+
+
 class BoundaryVectorCell:
     '''
     A boundary vector cell initiliased with preferred distance (mm) and angle (rad)
@@ -302,8 +362,13 @@ class PlaceCell:
         dW = [D * BVC_firings[i] *Phi(PC_firing, xi) for i in range(self.n_bvcs)]
         
         return dW
+        
 
 class BVC_PC_network:
+    '''
+    BVC-PC network.
+    If connection weights are not given, they are drawn randomly and connection weights are sampled ~ N(1,1)
+    '''
     def __init__(self, BVCs:list, n_PCs:int, n_BVCs_per_PC:int, connection_indices=False):
         self.BVCs = BVCs
         self.n_BVCs = len(BVCs)
@@ -331,3 +396,59 @@ class BVC_PC_network:
             PCs_population_firing[:, PC_idx] = self.PCs[PC_idx].compute_firing(distances, bearings, subtended_angles)
         
         return BVCs_population_firing, PCs_population_firing
+
+
+def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200):
+    '''
+    Plots firing field of (multiple) BVCs
+    '''
+    if not isinstance(bvcs, list):
+        bvcs = [bvcs]
+    n_bvcs = len(bvcs)
+    
+    if max_d =='auto':
+        max_d = int(max([i.d for i in bvcs]) * 1.5)
+    rads = torch.linspace(0, 2*torch.pi, n)
+    ds = torch.linspace(0, max_d, n)
+
+    rads_mat, ds_mat = torch.meshgrid(rads, ds)
+
+    plt.figure(figsize=(4*n_bvcs, 4))
+    for i in range(n_bvcs):
+        ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
+        ax.set_theta_direction(-1)
+        ax.set_theta_zero_location('N', offset=0)
+        if axis == 'off':
+            ax.set_xticks([])
+            ax.set_yticks([])
+        firing_rates = bvcs[i].compute_BVC_firing_single_segment(ds_mat, rads_mat)
+        ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
+    plt.show()
+
+
+def SSIM(x, y, k1=0.01, k2=0.03, alpha=1, beta=1, gamma=1):
+    '''
+    Computes the Structural Similarity Index (SSIM) of two images x and y
+    '''
+    assert x.shape == y.shape
+    
+    L = torch.max(torch.max(x), torch.max(y))
+    
+    x, y = x.flatten(), y.flatten()
+    
+    mu_x, mu_y = torch.mean(x), torch.mean(y)
+    sigma_x, sigma_y = torch.std(x, unbiased=True), torch.std(y, unbiased=True)
+    sigma_xy = torch.cov(torch.stack((x,y)))[0,1]
+    
+    c1 = (k1 * L) ** 2
+    luminance = (2 * mu_x * mu_y + c1) / (mu_x ** 2 + mu_y **2 + c1)
+    
+    c2 = (k2 * L) ** 2
+    contrast = (2 * sigma_x * sigma_y + c2) / (sigma_x **2 + sigma_y **2 + c2)
+    
+    c3 = c2 / 2
+    structure = (sigma_xy + c3) / (sigma_x * sigma_y + c3)
+    
+    SSIM = torch.pow(luminance, alpha) * torch.pow(contrast, beta) * torch.pow(structure, gamma)
+    
+    return SSIM

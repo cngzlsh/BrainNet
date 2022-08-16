@@ -168,31 +168,6 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
     plt.show()
 
 
-def plot_bvc_firing_field(bvcs, max_d='auto', n=200):
-    '''
-    Plots firing field of (multiple) BVCs
-    '''
-    if not isinstance(bvcs, list):
-        bvcs = [bvcs]
-    n_bvcs = len(bvcs)
-    
-    if max_d =='auto':
-        max_d = int(max([i.d for i in bvcs]) * 1.5)
-    rads = torch.linspace(0, 2*torch.pi, n)
-    ds = torch.linspace(0, max_d, n)
-
-    rads_mat, ds_mat = torch.meshgrid(rads, ds)
-
-    plt.figure(figsize=(4*n_bvcs, 4))
-    for i in range(n_bvcs):
-        ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
-        ax.set_theta_direction(-1)
-        ax.set_theta_zero_location('N', offset=0)
-        firing_rates = bvcs[i].compute_BVC_firing_single_segment(ds_mat, rads_mat)
-        ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
-    plt.show()
-
-
 def generate_locations(length, width, n):
     '''
     Generates multiple random location

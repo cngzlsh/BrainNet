@@ -197,34 +197,34 @@ if __name__ == '__main__':
     X_valid = generate_renewal_process_input_pattern(num_valid, input_dim, alphas, betas, time_steps)
 
 
-    approx_bnn = ComplexApproximateBNN(
+    approx_bnn = RecurrentApproximateBNN(
         x=x, y=y, z=z,
         input_dim=input_dim,
         output_dim=output_dim, 
-        residual_in=residual_in,
+        # residual_in=residual_in,
         recurrent_dim=-1,
         transfer_functions=transfer_functions
         ).to(device)
 
 
-    torch.save(approx_bnn.state_dict(), './approx_bnn_params/complex.pt')
-    save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
+    # torch.save(approx_bnn.state_dict(), './approx_bnn_params/complex.pt')
+    # save_non_linearities(approx_bnn.extract_non_linearities(), './approx_bnn_params/complex_activations.pkl')
 
 
     X_train, Y_train = generate_output_pattern(
         BNN=approx_bnn, 
         X=X_train,
-        gaussian_noise=gaussian_noise)
-    save_data(X_train, Y_train, './data/', f'complex_train.pkl')
+        gaussian_noise=False)
+    save_data(X_train, Y_train, './data/', f'recurrent_train_nonoise.pkl')
 
     X_test, Y_test = generate_output_pattern(
         BNN=approx_bnn, 
         X=X_test,
-        gaussian_noise=gaussian_noise)
-    save_data(X_test, Y_test, './data/', f'complex_test.pkl')
+        gaussian_noise=False)
+    save_data(X_test, Y_test, './data/', f'recurrent_test_nonoise.pkl')
 
     X_valid, Y_valid = generate_output_pattern(
         BNN=approx_bnn, 
         X=X_valid,
-        gaussian_noise=gaussian_noise)
-    save_data(X_valid, Y_valid, './data/', f'complex_valid.pkl')
+        gaussian_noise=False)
+    save_data(X_valid, Y_valid, './data/', f'recurrent_valid_nonoise.pkl')
