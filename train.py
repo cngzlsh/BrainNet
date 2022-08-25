@@ -214,7 +214,11 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
 
                 # training parameters
                 optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-                criterion = nn.MSELoss()    
+                try:
+                    if kwargs['loss'] =='CrossEntropy':
+                        criterion = nn.CrossEntropyLoss()
+                except:
+                    criterion = nn.MSELoss() 
 
                 train_losses, eval_losses = train(
                     model=DNN,
@@ -229,7 +233,11 @@ def param_grid_search(hidden_dims, n_layerss, **kwargs):
                 DNN = RecurrentDNN(input_dim=16, hidden_dim=hidden_dim, n_linear_layers=n_linear_layers, output_dim=16).to(device)
 
                 optimiser = torch.optim.Adam(DNN.parameters(), lr=1e-3)
-                criterion = nn.MSELoss()
+                try:
+                    if kwargs['loss'] =='CrossEntropy':
+                        criterion = nn.CrossEntropyLoss()
+                except:
+                    criterion = nn.MSELoss()
 
                 train_losses, eval_losses = train_rnn(
                     model=DNN,

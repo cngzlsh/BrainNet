@@ -107,9 +107,6 @@ class RectangleEnvironment:
                             torch.logical_xor(intersec_y <= barrier[0,1], intersec_y <= barrier[1,1])),
                         torch.sign(vec_to_bearing[:,:,0,0]) == torch.sign(torch.sin(b))) # filter out barriers in negative directions
                     
-                    # if bearing == 180:
-                    #     assert False
-                    
                     dist_to_barrier = torch.sqrt(torch.pow(vec_to_bearing[:,:,0,0], 2) + torch.pow(vec_to_bearing[:,:,1,0], 2)) # distances to barrier
                     dist_to_barrier = torch.nan_to_num(torch.multiply(1/barrier_in_direction, dist_to_barrier),float('inf'))
 
@@ -157,7 +154,7 @@ class RectangleEnvironment:
         return distances, bearings, angles
     
     
-    def visualise_firing_rates(self, firing_rates, cb=False):
+    def visualise_firing_rates(self, firing_rates, cb=False, fname=False):
         '''
         Visualises firing map of (predicted) BVCs, PCs or other neurons in the environment
         
@@ -180,6 +177,9 @@ class RectangleEnvironment:
                 
             for barrier in self.barriers:
                 plt.plot([barrier[0,0], barrier[1,0]], [barrier[0,1], barrier[1,1]], color='grey', linewidth=3) 
+        
+        if fname is not False:
+            plt.savefig('./figures/' + fname, dpi=350)
         plt.show()
     
     
@@ -200,9 +200,37 @@ class RectangleEnvironment:
         if return_firing_rates:
             return firing_rates
     
-    def plot_environment(self):
+    def check_new_loc(self, current_loc, proposed_loc):
         '''
-        Visualise the environment with all barriers
+        Returns False if there is an intersection or is outside boundary
+        '''
+        
+        if proposed_loc[0] > self.l or proposed_loc[0] < 0:
+            return False
+        if proposed_loc[1] > self.w or proposed_loc[1] < 0:
+            return False
+        
+        for barrier in self.barriers:
+            m1 = (proposed_loc[1] - current_loc[1]) / (proposed_loc[0] - current_loc[0] + 1e-3)
+            c1 = proposed_loc[1] - m1 * proposed_loc[0]
+            
+            m2 = (barrier[1,1] - barrier[0,1]) / (barrier[1,0] - barrier[0,0] + 1e-3) # m = (y1 - y0) / (x1 - x0)
+            c2 = barrier[1,1] - m2 * barrier[1,0] # c = y1 - m* x1
+            
+            intersec_loc = torch.linalg.inv(torch.Tensor([[m1, -1], [m2, -1]])) @ torch.Tensor([[-c1], [-c2]])
+            
+            criterion1 = torch.logical_xor(intersec_loc[0] <= proposed_loc[0], intersec_loc[0] <= current_loc[0])
+            criterion2 = torch.logical_xor(intersec_loc[1] <= proposed_loc[1], intersec_loc[1] <= current_loc[1])
+            criterion3 = torch.logical_xor(intersec_loc[0] <= barrier[0,0], intersec_loc[0] <= barrier[1,0])
+            criterion4 = torch.logical_xor(intersec_loc[1] <= barrier[0,1], intersec_loc[1] <= barrier[1,1])
+            if torch.all(torch.vstack([criterion1, criterion2, criterion3, criterion4])):
+                return False
+        return True
+    
+    def plot_environment_and_trajectory(self, loc_history=False, axis=False, fname=False):
+        '''
+        Plots the environment with barriers inserted
+        If trajectory is provided, also plots the trajectory
         '''
         fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio))
         background = patches.Rectangle((0, 0), self.l, self.w, edgecolor='grey', facecolor='lightgrey', zorder=-1, fill=True, lw=5)
@@ -213,9 +241,16 @@ class RectangleEnvironment:
                 ax.plot([barrier[0,0], barrier[1,0]], [barrier[0,1], barrier[1,1]], color='grey', linewidth=3) 
         plt.xlim([-1, self.l+1])
         plt.ylim([-1, self.w+1])
-        ax.axis('off')
+        if not axis:
+            ax.axis('off')
         ax.set_aspect('equal')
         ax.grid(False)
+        
+        if loc_history is not False:
+            ax.scatter(loc_history[:,0], loc_history[:,1], c=np.arange(loc_history.shape[0]), marker='o', s=1)
+
+        if fname is not False:
+            plt.savefig('./figures/' + fname, dpi=350)
         plt.show()
 
 
@@ -252,6 +287,79 @@ class CircleEnvironment:
         
     def visualise_cell_firing_field(self, neurons, n_disc=101):
         pass
+
+
+class Agent:
+    
+    '''
+    An artificial agent that roams in an environment. Must be passed with an environment class.
+    
+    params:
+    initial_v:        initial velocity, (2,) torch Tensor
+    initial_pos:      initial position, (2,) torch Tensor
+    dt:               discretised time intercal
+    bounce_param:     concentration parameter of random rotation when agent hits a wall
+    drift:            stochastic drift in velocity, defaults to 0, can be a lambda function
+    diffusion:        diffusion coefficient function, variations in agent's velocity each time step
+    '''
+    def __init__(self, env, initial_v=False, initial_pos=False, dt=0.1, bounce_param=2.0, drift=0.0, diffusion=1.0):
+        
+        self.env = env
+        self.dt = dt
+        self.bounce_param = bounce_param
+        self.drift = drift
+        self.diffusion = diffusion
+        self.reset(initial_pos, initial_v)
+    
+    def reset(self, initial_pos=False, initial_v=False):
+        '''
+        Resets time step, initial positions and velocity
+        '''
+        if initial_pos:
+            self.loc = initial_pos
+            assert self.loc[0] >= 0 and self.loc[0] <= self.env.l
+            assert self.loc[1] >= 0 and self.loc[1] <= self.env.w
+            
+        else:
+            x = dist.Uniform(low=0, high=self.env.l).sample(sample_shape=torch.Size([1]))
+            y = dist.Uniform(low=0, high=self.env.w).sample(sample_shape=torch.Size([1]))
+            self.loc = torch.concat((x,y))[:,0]
+            
+        if initial_v:
+            self.v = initial_v
+        else:
+            self.v = dist.Normal(0,2).sample(sample_shape=torch.Size([2]))
+            
+        self.loc_history = [self.loc]
+        self.t = 0
+    
+    
+    def step(self):
+        '''
+        One time interval movement
+        '''
+        self.t += self.dt
+        current_loc = self.loc
+        proposed_loc = self.loc + self.dt * self.v
+        
+        if self.env.check_new_loc(current_loc, proposed_loc):
+            self.loc = proposed_loc
+            self.loc_history.append(self.loc)
+        else:
+            theta = dist.von_mises.VonMises(0,self.bounce_param).sample() # rotation angle, drawn from circular Gaussian
+            rotation = torch.Tensor([[torch.cos(theta), -torch.sin(theta)], [torch.sin(theta), torch.cos(theta)]])
+            self.v = - self.v @ rotation
+            
+        self.v += diffusion_process(self.v, self.dt, self.t, self.drift, self.diffusion)
+    
+    def run(self, time):
+        '''
+        Generate history of the agent's position in the environment up to a certain time
+        '''
+        while self.t < time:
+            self.step()
+            
+        return torch.vstack(self.loc_history)
 
 
 class BoundaryVectorCell:
@@ -341,7 +449,7 @@ class PlaceCell:
         thresholded_sum = self.A * weighted_sum
         
         if self.T == 'auto':
-            self.T = 0.9 * torch.max(thresholded_sum)
+            self.T = 0.8 * torch.max(thresholded_sum)
             
         thresholded_sum = thresholded_sum - self.T
         
@@ -398,7 +506,7 @@ class BVC_PC_network:
         return BVCs_population_firing, PCs_population_firing
 
 
-def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200):
+def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200, fname=False):
     '''
     Plots firing field of (multiple) BVCs
     '''
@@ -423,6 +531,9 @@ def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200):
             ax.set_yticks([])
         firing_rates = bvcs[i].compute_BVC_firing_single_segment(ds_mat, rads_mat)
         ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
+    
+    if fname is not False:
+            plt.savefig('./figures/' + fname, dpi=350)
     plt.show()
 
 

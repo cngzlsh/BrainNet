@@ -84,7 +84,7 @@ class BNN_Dataset(Dataset):
         return input, label
 
 
-def visualise_prediction(y, y_hat, reshape='square'):
+def visualise_prediction(y, y_hat, reshape='square', fname=False):
     '''
     Visualise and compare the prediction of a neuronal firing pattern in a colour map.
     :param y:                   true label
@@ -115,10 +115,12 @@ def visualise_prediction(y, y_hat, reshape='square'):
     plt.axis('off')
     plt.title('Predicted firing pattern')
 
+    if fname is not False:
+        plt.savefig('./figures/' + fname, dpi=350)
     plt.show()
 
 
-def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
+def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss', fname=False):
     '''
     Plots the loss history per epoch.
     '''
@@ -134,6 +136,9 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss'):
     plt.ylabel(loss_func)
 
     plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
+
+    if fname is not False:
+        plt.savefig('./figures/' + fname, dpi=350)
     plt.show()
 
 
@@ -163,7 +168,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
     if colorbar:
         cbar = plt.colorbar(plt3d)
         cbar.set_label(z_label)
-    if fname:
+    if fname is not False:
         plt.savefig('./figures/' + fname)
     plt.show()
 
@@ -185,3 +190,30 @@ def calc_entropy(x:torch.Tensor):
     freq = x.unique(return_counts=True)[1]
     probs = freq/torch.sum(freq)
     return -torch.multiply(probs, torch.log(probs)).sum()
+
+
+def diffusion_process(xt, dt, t, drift=0.0, diffusion=1.0):
+    '''
+    Generalised, continous-time Brownian motion (Ornstein-Uhlenbeck process): 
+        dx_t = a(x_t, t)dt + b(x_t, t)dB_t
+    params:
+        drift:      drift function a(x_t, t) function, lambda function or constant
+        diffusion:  diffusion coefficient function, lambda function or constant
+    returns:
+        dxt:        change in x in dt
+    '''
+    try:
+        mu = drift(xt, t)
+    except:
+        mu = drift * torch.ones_like(xt)
+        
+    try:
+        sigma = diffusion(xt, t)
+    except:
+        sigma = diffusion * torch.ones_like(xt)
+    
+    assert mu.shape == xt.shape
+    assert sigma.shape == xt.shape
+    
+    dxt = mu * dt + sigma * dist.Normal(0, dt).sample(xt.shape)
+    return dxt
