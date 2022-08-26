@@ -103,7 +103,7 @@ def visualise_prediction(y, y_hat, reshape='square', fname=False):
     except:
         raise ValueError('Reshape dimension mismatch')
 
-    plt.figure(figsize=(12,6))
+    plt.figure(figsize=(12,6), frameon=False)
     
     plt.subplot(121)
     plt.imshow(y_r)
@@ -126,7 +126,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss', fname=Fals
     '''
     n_epochs = len(train_losses)
     
-    plt.figure(figsize=(12,4))
+    plt.figure(figsize=(12,4), frameon=False)
     plt.plot(train_losses)
     plt.plot(eval_losses)
 
@@ -159,7 +159,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
         for j in range(len(y)):
             xyz[i*len(x)+j,:] = np.array([x[i], y[j], z[i,j]])
     
-    plt.figure(figsize=figsize)
+    plt.figure(figsize=figsize, frameon=False)
     ax = plt.axes(projection='3d')
     
     plt.xlabel(x_label)
@@ -169,7 +169,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
         cbar = plt.colorbar(plt3d)
         cbar.set_label(z_label)
     if fname is not False:
-        plt.savefig('./figures/' + fname)
+        plt.savefig('./figures/' + fname, dpi=350)
     plt.show()
 
 

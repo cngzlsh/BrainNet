@@ -166,7 +166,7 @@ class RectangleEnvironment:
             torch.linspace(0, self.l.item(), mesh_x),
             torch.linspace(0, self.w.item(), mesh_y))
         
-        plt.figure(figsize=(6*n_neurons, 6/self.aspect_ratio))
+        plt.figure(figsize=(6*n_neurons, 6/self.aspect_ratio), frameon=False)
         for neuron_idx in range(n_neurons):
             plt.subplot(1, n_neurons, neuron_idx+1)
             plt.scatter(x, y, c = firing_rates[:, :, neuron_idx])
@@ -232,7 +232,7 @@ class RectangleEnvironment:
         Plots the environment with barriers inserted
         If trajectory is provided, also plots the trajectory
         '''
-        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio))
+        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio), frameon=False)
         background = patches.Rectangle((0, 0), self.l, self.w, edgecolor='grey', facecolor='lightgrey', zorder=-1, fill=True, lw=5)
         ax.add_patch(background)
         
@@ -521,7 +521,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200, fname=False):
 
     rads_mat, ds_mat = torch.meshgrid(rads, ds)
 
-    plt.figure(figsize=(4*n_bvcs, 4))
+    plt.figure(figsize=(4*n_bvcs, 4), frameon=False)
     for i in range(n_bvcs):
         ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
         ax.set_theta_direction(-1)
