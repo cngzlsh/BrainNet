@@ -116,7 +116,7 @@ def visualise_prediction(y, y_hat, reshape='square', fname=False):
     plt.title('Predicted firing pattern')
 
     if fname is not False:
-        plt.savefig('./figures/' + fname, dpi=350)
+        plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
     plt.show()
 
 
@@ -138,7 +138,7 @@ def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss', fname=Fals
     plt.title(f'Training and evaluation {loss_func} curve over {n_epochs} epochs')
 
     if fname is not False:
-        plt.savefig('./figures/' + fname, dpi=350)
+        plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
     plt.show()
 
 
@@ -169,7 +169,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
         cbar = plt.colorbar(plt3d)
         cbar.set_label(z_label)
     if fname is not False:
-        plt.savefig('./figures/' + fname, dpi=350)
+        plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
     plt.show()
 
 

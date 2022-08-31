@@ -186,7 +186,7 @@ if __name__ == '__main__':
     mean_freq = 5
 
     alphas = torch.ones(input_dim) * 2
-    betas = dist.Poisson(rate=mean_freq*2).sample(sample_shape=torch.Size([input_dim]))
+    betas = dist.Normal(torch.Tensor([10]), torch.ones(1)).sample(sample_shape=torch.Size([input_dim]))
 
     time_steps = 50
     transfer_functions=[nn.ReLU(), nn.ELU(), nn.SiLU(), nn.CELU(), nn.Tanh(), nn.Sigmoid(), nn.LeakyReLU(0.1), nn.LeakyReLU(0.2), nn.LeakyReLU(0.3)]

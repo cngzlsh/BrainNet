@@ -179,7 +179,7 @@ class RectangleEnvironment:
                 plt.plot([barrier[0,0], barrier[1,0]], [barrier[0,1], barrier[1,1]], color='grey', linewidth=3) 
         
         if fname is not False:
-            plt.savefig('./figures/' + fname, dpi=350)
+            plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
         plt.show()
     
     
@@ -250,7 +250,7 @@ class RectangleEnvironment:
             ax.scatter(loc_history[:,0], loc_history[:,1], c=np.arange(loc_history.shape[0]), marker='o', s=1)
 
         if fname is not False:
-            plt.savefig('./figures/' + fname, dpi=350)
+            plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
         plt.show()
 
 
@@ -533,7 +533,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200, fname=False):
         ax.scatter(rads_mat, ds_mat, c=firing_rates, s=1, cmap='hsv', alpha=0.75)
     
     if fname is not False:
-            plt.savefig('./figures/' + fname, dpi=350)
+            plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
     plt.show()
 
 
