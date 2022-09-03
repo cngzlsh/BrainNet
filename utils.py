@@ -103,7 +103,7 @@ def visualise_prediction(y, y_hat, reshape='square', fname=False):
     except:
         raise ValueError('Reshape dimension mismatch')
 
-    plt.figure(figsize=(12,6), frameon=False)
+    plt.figure(figsize=(12,6))
     
     plt.subplot(121)
     plt.imshow(y_r)
@@ -120,13 +120,24 @@ def visualise_prediction(y, y_hat, reshape='square', fname=False):
     plt.show()
 
 
-def plot_loss_curves(train_losses, eval_losses, loss_func='MSE loss', fname=False):
+def moving_average(time_series, lag):
+    time_series = torch.tensor(time_series).view(1,1,-1)
+    conv = nn.Conv1d(1,1,lag, bias=False)
+    conv.weight.data = torch.ones(conv.weight.data.shape)/lag
+    return conv(time_series).flatten().tolist()
+
+
+def plot_loss_curves(train_losses, eval_losses, smoothen=25, loss_func='MSE loss', fname=False):
     '''
     Plots the loss history per epoch.
     '''
     n_epochs = len(train_losses)
+
+    if smoothen is not False:
+        train_losses = moving_average(train_losses, smoothen)
+        eval_losses = moving_average(eval_losses, smoothen)
     
-    plt.figure(figsize=(12,4), frameon=False)
+    plt.figure(figsize=(12,4))
     plt.plot(train_losses)
     plt.plot(eval_losses)
 
@@ -150,7 +161,7 @@ def find_argmin_in_matrix(mat):
     return int(np.argmin(mat)/nc), np.argmin(mat) - int(np.argmin(mat)/nc) * nc
 
 
-def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=False, figsize=(12,10)):
+def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=False, title=False, figsize=(12,10)):
     '''
     Produces 3d scatter plot
     '''
@@ -159,7 +170,7 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
         for j in range(len(y)):
             xyz[i*len(x)+j,:] = np.array([x[i], y[j], z[i,j]])
     
-    plt.figure(figsize=figsize, frameon=False)
+    plt.figure(figsize=figsize)
     ax = plt.axes(projection='3d')
     
     plt.xlabel(x_label)
@@ -168,6 +179,8 @@ def plot_3d_scatter(x, y, z, x_label, y_label, z_label, colorbar=True, fname=Fal
     if colorbar:
         cbar = plt.colorbar(plt3d)
         cbar.set_label(z_label)
+    if title is not False:
+        plt.title(title)
     if fname is not False:
         plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
     plt.show()

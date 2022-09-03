@@ -29,6 +29,8 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
     for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0
+
+        n_batches = len(train_loader)
         
         for i, (X, Y) in enumerate(iter(train_loader)):
             
@@ -46,18 +48,18 @@ def train(model, train_loader, test_loader, optimiser, criterion, num_epochs, ve
 
         eval_loss = eval(model, test_loader, criterion)
 
-        train_losses.append(epoch_loss)
+        train_losses.append(epoch_loss / n_batches)
         eval_losses.append(eval_loss)
 
         if verbose:
             epoch_end = time.time()
             if num_epochs < 50:
                 hrs, mins, secs = elapsed_time(start, epoch_end)
-                print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+                print(f'Epoch {epoch+1}: training loss {epoch_loss / n_batches}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
             else:
                 if epoch % 50 == 0:
                     hrs, mins, secs = elapsed_time(start, epoch_end)
-                    print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+                    print(f'Epoch {epoch+1}: training loss {epoch_loss/ n_batches}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
         if force_stop and i == 20:
             break
@@ -78,6 +80,8 @@ def eval(model, test_loader, criterion):
     Evaluation function. Iterates through test set and compute loss.
     '''
     model.eval()
+    
+    n_batches = len(test_loader)
 
     with torch.no_grad():
 
@@ -90,7 +94,7 @@ def eval(model, test_loader, criterion):
             
             eval_loss += loss.item()
     
-    return eval_loss
+    return eval_loss / n_batches
 
 
 def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs, verbose=True, force_stop=False, return_init_eval_loss=False):
@@ -113,6 +117,8 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
         c_prev = torch.zeros([model.n_lstm_layers, train_loader.batch_size, model.hidden_dim]).to(device)
         rec_prev = (h_prev, c_prev)
 
+        n_batches = len(train_loader)
+
         for i, (X, Y) in enumerate(iter(train_loader)): # X: [batch_size, time_step, input_dim]
             
             Y_hat, rec_prev = model(X, rec_prev)
@@ -130,18 +136,18 @@ def train_rnn(model, train_loader, test_loader, optimiser, criterion, num_epochs
 
         eval_loss = eval_rnn(model, test_loader, criterion)
 
-        train_losses.append(epoch_loss)
+        train_losses.append(epoch_loss/n_batches)
         eval_losses.append(eval_loss)
 
         if verbose:
             epoch_end = time.time()
             if num_epochs < 50:
                 hrs, mins, secs = elapsed_time(start, epoch_end)
-                print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+                print(f'Epoch {epoch+1}: training loss {epoch_loss/n_batches}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
             else:
                 if epoch % 50 == 0:
                     hrs, mins, secs = elapsed_time(start, epoch_end)
-                    print(f'Epoch {epoch+1}: training loss {epoch_loss}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
+                    print(f'Epoch {epoch+1}: training loss {epoch_loss/n_batches}, eval loss {eval_loss}. Time elapsed: {int(hrs)} h {int(mins)} m {int(secs)} s.')
         
         if force_stop and i == 20:
             break
@@ -169,6 +175,7 @@ def eval_rnn(model, test_loader, criterion, save_Y_hat=False):
     with torch.no_grad():
 
         eval_loss = 0
+        n_batches = len(test_loader)
         
         h_prev = torch.zeros([model.n_lstm_layers, test_loader.batch_size, model.hidden_dim]).to(device)
         c_prev = torch.zeros([model.n_lstm_layers, test_loader.batch_size, model.hidden_dim]).to(device)
@@ -185,9 +192,9 @@ def eval_rnn(model, test_loader, criterion, save_Y_hat=False):
             eval_loss += loss.item()
     
     if save_Y_hat:
-        return eval_loss, torch.vstack(Y_hats)
+        return eval_loss/n_batches, torch.vstack(Y_hats)
     else:
-        return eval_loss
+        return eval_loss/n_batches
 
 
 def param_grid_search(hidden_dims, n_layerss, **kwargs):

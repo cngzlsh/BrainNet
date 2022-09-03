@@ -183,7 +183,7 @@ class RectangleEnvironment:
         plt.show()
     
     
-    def visualise_cell_firing_field(self, neurons, n_disc=101, return_firing_rates=False):
+    def visualise_cell_firing_field(self, neurons, n_disc=101, return_firing_rates=False, cb=False, fname=False):
         '''
         Visualises the firing field of a group of neurons
         '''
@@ -195,7 +195,7 @@ class RectangleEnvironment:
         distances, bearings, angles = self.generate_mesh(n_disc=n_disc)
         
         firing_rates = torch.stack([neuron.compute_firing(distances, bearings, angles) for neuron in neurons], dim=-1)
-        self.visualise_firing_rates(firing_rates)
+        self.visualise_firing_rates(firing_rates, cb=cb, fname=fname)
         
         if return_firing_rates:
             return firing_rates
@@ -232,7 +232,7 @@ class RectangleEnvironment:
         Plots the environment with barriers inserted
         If trajectory is provided, also plots the trajectory
         '''
-        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio), frameon=False)
+        fig, ax = plt.subplots(figsize=(6, 6/self.aspect_ratio))
         background = patches.Rectangle((0, 0), self.l, self.w, edgecolor='grey', facecolor='lightgrey', zorder=-1, fill=True, lw=5)
         ax.add_patch(background)
         
@@ -521,7 +521,7 @@ def plot_bvc_firing_field(bvcs, max_d='auto', axis='on', n=200, fname=False):
 
     rads_mat, ds_mat = torch.meshgrid(rads, ds)
 
-    plt.figure(figsize=(4*n_bvcs, 4), frameon=False)
+    plt.figure(figsize=(4*n_bvcs, 4))
     for i in range(n_bvcs):
         ax = plt.subplot(1, n_bvcs,i+1, projection='polar')
         ax.set_theta_direction(-1)
