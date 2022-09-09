@@ -288,12 +288,13 @@ def train_varying_data_efficiency(hidden_dim, n_layers, verbose=True, **kwargs):
     test_dataloader = kwargs['test_dataloader']
     n_datas = kwargs['n_datas']
     n_epochs = kwargs['n_epochs']
-    batch_size = kwargs['batch_size']
     _type = kwargs['type']
     
     for i, n_data in enumerate(n_datas):
         if verbose:
             print(f'{hidden_dim} hidden dim, {n_layers} layers, using {n_data} out of {max(n_datas)} data points.', end='\r')
+
+        batch_size = min(n_data, 200)
             
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=RandomSampler(train_dataset, replacement=False, num_samples=n_data))
         
@@ -344,6 +345,7 @@ def complexity_varying_data_efficiency(hidden_dims, n_layerss, verbose=True, **k
 def repeated_complexity_varying_data_efficiency(hidden_dims, n_layerss, n_repeats, verbose=True, **kwargs):
     final_eval_losses = torch.zeros(len(hidden_dims), len(n_layerss), len(kwargs['n_datas']))
     
+    print('Training on: ', torch.cuda.get_device_name())
     start = time.time()
     
     for n in range(n_repeats):
@@ -458,7 +460,7 @@ def plasticity_analysis(transfer_learning, **kwargs):
 def repeated_plasticity_analysis(n_repeats, transfer_learning, **kwargs):
     n_sigmas = kwargs['sigmas'].shape[0]
     num_epochs = kwargs['num_epochs']
-    
+    print('Training on: ', torch.cuda.get_device_name())
     train_losses_by_sigma_tensor = torch.zeros(n_repeats, n_sigmas, num_epochs)
     eval_losses_by_sigma_tensor = torch.zeros_like(train_losses_by_sigma_tensor)
     init_losses_by_sigma_tensor = torch.zeros(n_repeats, n_sigmas)
