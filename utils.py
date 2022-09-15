@@ -84,7 +84,7 @@ class BNN_Dataset(Dataset):
         return input, label
 
 
-def visualise_prediction(y, y_hat, reshape='square', fname=False):
+def visualise_prediction(y, y_hat, reshape='square', cb=False, fname=False):
     '''
     Visualise and compare the prediction of a neuronal firing pattern in a colour map.
     :param y:                   true label
@@ -109,11 +109,15 @@ def visualise_prediction(y, y_hat, reshape='square', fname=False):
     plt.imshow(y_r)
     plt.axis('off')
     plt.title('True firing pattern')
+    if cb:
+        plt.colorbar()
 
     plt.subplot(122)
     plt.imshow(y_hat_r)
     plt.axis('off')
     plt.title('Predicted firing pattern')
+    if cb:
+        plt.colorbar()
 
     if fname is not False:
         plt.savefig('./figures/' + fname, dpi=350, bbox_inches='tight')
